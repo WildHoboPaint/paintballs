@@ -1,0 +1,35 @@
+# runtime saves — NEVER commit (keeps accounts/progress safe across updates)
+data/
+
+# build artifacts / backups / junk
+*.zip
+_backup/
+node_modules/
+.DS_Store
+Thumbs.db
+
+# old standalone prototype (not used by the server)
+high-velocity-paintball.html
+
+# stray preview files
+public/tiles/_*.png
+public/sprites/__tester_tmp.txt
+
+# AI source art — kept locally; not needed at runtime (tiles are pre-baked in public/tiles/)
+public/sprites/original/
+public/sprites/plains.png
+public/sprites/plains2.png
+public/sprites/forest.png
+public/sprites/Forest2.png
+public/sprites/hill.png
+public/sprites/Hill2.png
+public/sprites/mountain.png
+public/sprites/mountain2.png
+public/sprites/water.png
+public/sprites/water2.png
+public/sprites/wasteland.png
+public/sprites/wasteland2.png
+public/sprites/armor.png
+public/sprites/armor2.png
+public/sprites/weapons.png
+public/sprites/weapons2.png
