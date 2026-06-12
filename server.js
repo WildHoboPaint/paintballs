@@ -183,6 +183,16 @@ class Conn {
         this.send({ t:'readyresult', ...r });
         break;
       }
+      case 'chat': {
+        if (this.playerId == null) return;
+        const now = Date.now(); if (this._lastChat && now - this._lastChat < 400) return; this._lastChat = now;
+        const p = game.players.get(this.playerId); if (!p) return;
+        const txt = ('' + (msg.text || '')).replace(/[\u0000-\u001f]/g, ' ').slice(0, 160).trim();
+        if (!txt) return;
+        const out = { t:'chat', from:p.name, team:p.team, text:txt };
+        for (const c of clients) c.send(out);
+        break;
+      }
     }
   }
 }

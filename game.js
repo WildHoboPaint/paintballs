@@ -84,8 +84,8 @@ const WEAPONS = {
   assault_rifle:{ name:"Assault Rifle",    cost:1000, dmg:1, fireRate:260, spread:0.06, mag:24, range:380, reload:1.9, proj:1, desc:"Rapid fire, medium range." },
   sniper_rifle: { name:"Sniper Rifle",     cost:1200, dmg:1, fireRate:1300,spread:0.004,mag:5,  range:780, reload:2.0, proj:1, scope:true, desc:"Long-range specialist, very slow." },
   minigun:      { name:"Minigun",          cost:1500, dmg:1, fireRate:130, spread:0.12, mag:80, range:340, reload:3.0, proj:1, desc:"Torrent of paint, short range." },
-  bazooka:      { name:"Rocket Launcher",  cost:1500, dmg:1, fireRate:1700,spread:0.03, mag:4,  range:600, reload:2.8, proj:1, splash:110, desc:"Long-range rocket, big area splat." },
-  grenade_launcher:{ name:"Grenade Launcher", cost:1300, dmg:1, fireRate:1400, spread:0.05, mag:5, range:360, reload:2.4, proj:1, splash:96, desc:"Lobbed grenade — ~6-tile splat, medium range." },
+  bazooka:      { name:"Rocket Launcher",  cost:1500, dmg:1, fireRate:1700,spread:0.03, mag:4,  range:600, reload:2.8, proj:1, splash:110, pspeed:320, desc:"Fast rocket, big splat — blocked by terrain." },
+  grenade_launcher:{ name:"Grenade Launcher", cost:1300, dmg:1, fireRate:1400, spread:0.05, mag:5, range:360, reload:2.4, proj:1, splash:48, pspeed:170, lob:true, desc:"Lobbed grenade — flies over terrain, ~3-tile splat." },
   shotgun:      { name:"Shotgun",          cost:800,  dmg:1, fireRate:900, spread:0.32, mag:6,  range:190, reload:1.9, proj:3, desc:"3-pellet spread, very short range." },
   blowgun:      { name:"Blowgun",          cost:600,  dmg:1, fireRate:750, spread:0.025,mag:10, range:360, reload:1.5, proj:1, silent:true, desc:"Silent darts, medium range." },
   auto_pistol:  { name:"Auto Pistol",      cost:500,  dmg:1, fireRate:380, spread:0.05, mag:12, range:250, reload:1.2, proj:1, desc:"Quick, light, short range." },
@@ -117,9 +117,9 @@ const GADGETS = {
   decoy:  { name:"Decoy",      cost:400,  charges:2, desc:"Press G to drop a fake clone (2/round)." },
 };
 const AMMO = {
-  normal: { name:"Standard Paint", cost:0,   speed:220, rangeMul:1.0,  pierce:false, desc:"Slow, lobbed paint." },
-  fast:   { name:"Fast Paint",     cost:600, speed:380, rangeMul:1.15, pierce:false, desc:"Noticeably faster and longer." },
-  ap:     { name:"Armor-Piercing", cost:900, speed:260, rangeMul:1.0,  pierce:true,  desc:"Ignores armor's bounce chance." },
+  normal: { name:"Standard Paint", cost:0,   speed:190, rangeMul:1.0,  pierce:false, desc:"Standard lobbed paint." },
+  fast:   { name:"Fast Paint",     cost:600, speed:260, rangeMul:1.15, pierce:false, desc:"Faster and a bit longer." },
+  ap:     { name:"Armor-Piercing", cost:900, speed:230, rangeMul:1.0,  pierce:true,  desc:"Ignores armor's bounce chance." },
 };
 const CATALOG = { weapon:WEAPONS, armor:ARMOR, vision:VISION, camo:CAMO, gadget:GADGETS, ammo:AMMO };
 const CATS = Object.keys(CATALOG);
@@ -331,12 +331,14 @@ class Game {
     if(ammoId==='fast'||ammoId==='ap'){ f.ammoStock[ammoId]=Math.max(0,f.ammoStock[ammoId]-(st.proj||1)); }
     const pf=!!(wdef&&wdef.scope);                       // sniper rounds pass through forest
     const col=paintColor(wdef,ammoId);
+    const bspeed=wdef.pspeed||st.ammoSpeed;              // grenades/rockets set their own projectile speed
+    const lob=!!wdef.lob;                                // lobbed shots fly over terrain
     const reach=Math.min(st.range, (f.input&&f.input.aimDist>0)?f.input.aimDist:st.range);  // shoot short if you aim short
     for(let i=0;i<st.proj;i++){
       const ang=f.aim+(Math.random()-0.5)*st.spread*2;
-      this.balls.push({ x:f.x+Math.cos(f.aim)*(f.r+6), y:f.y+Math.sin(f.aim)*(f.r+6), x0:f.x, y0:f.y, pforest:pf,
-        vx:Math.cos(ang),vy:Math.sin(ang),speed:st.ammoSpeed, dmg:st.dmg, team:f.team, owner:f.id,
-        life:reach/st.ammoSpeed, color:col, r:5, pierce:st.pierce, splash:st.splash });
+      this.balls.push({ x:f.x+Math.cos(f.aim)*(f.r+6), y:f.y+Math.sin(f.aim)*(f.r+6), x0:f.x, y0:f.y, pforest:pf, lob:lob,
+        vx:Math.cos(ang),vy:Math.sin(ang),speed:bspeed, dmg:st.dmg, team:f.team, owner:f.id,
+        life:reach/bspeed, color:col, r:5, pierce:st.pierce, splash:st.splash });
     }
     if(f.ammo<=0) this.reload(f);
   }
@@ -355,7 +357,7 @@ class Game {
     this.emit({type:'splat',x:target.x,y:target.y,c:attacker?CLASSES[attacker.cls].color:'#fff'});
     const rew=(attacker&&!attacker.bot)?SPLAT_REWARD:0, xpg=(attacker&&!attacker.bot)?1:0;
     this.emit({type:'elim',byId:attacker?attacker.id:0,by:attacker?attacker.name:'?',byTeam:attacker?attacker.team:'',vtId:target.id,vt:target.name,vtTeam:target.team, rew, xp:xpg});
-    if(attacker){ attacker.kills++; attacker.roundKills=(attacker.roundKills||0)+1; if(!attacker.bot){ this.addMoney(attacker,SPLAT_REWARD); this.gainXp(attacker,1); } }
+    if(attacker){ attacker.kills++; attacker.roundKills=(attacker.roundKills||0)+1; if(!attacker.bot){ if(!this.tournament) this.addMoney(attacker,SPLAT_REWARD); this.gainXp(attacker,1); } }
   }
   splashDamage(x,y,radius,team,attacker,color){
     this.emit({type:'splash',x:Math.round(x),y:Math.round(y),r:Math.round(radius),c:color||(attacker?CLASSES[attacker.cls].color:'#ffd166')});
@@ -369,7 +371,7 @@ class Game {
 
   // ---- modes & tournament ----
   allAnted(){ const ps=[...this.players.values()]; return ps.length>0 && ps.every(p=>p.wantAnte && this.getMoney(p)>=p.anteAmt); }
-  pickMode(){ return MODES[Math.floor(rand(0,MODES.length))]; }
+  pickMode(){ let pool=MODES.slice(); if(this.players.size<2) pool=pool.filter(m=>m!=='ctf'); if(!pool.length) pool=['tdm']; return pool[Math.floor(rand(0,pool.length))]; }
   modeName(){ return this.tournament?MODE_NAMES.tournament:(MODE_NAMES[this.mode]||this.mode); }
   assignTeams(mode){ const ps=[...this.players.values()];
     if(mode==='invaders'){ for(const p of ps) p.team='blue'; }
@@ -433,7 +435,7 @@ class Game {
     if(mode==='invaders'){
       for(const p of this.players.values()){ const bonus=(p.roundKills||0)*BOT_BONUS+(p.alive?SURVIVOR_BONUS:0); if(bonus) this.addMoney(p,bonus); }
       this.emit({type:'msg',text: winner==='blue'?'You survived the invasion! Bonus paid per bot splatted.':'The swarm overran you — regroup.'});
-    } else if(winner!=='tie'){
+    } else if(winner!=='tie' && !this.tournament){
       for(const p of this.players.values()) if(p.team===winner){ this.addMoney(p,ROUND_WIN_BONUS); if(p.alive) this.addMoney(p,SURVIVOR_BONUS); }
     }
     let seriesOver=false;
@@ -466,7 +468,7 @@ class Game {
 
   // ---- visibility (terrain + camo + vision) ----
   concealType(f){ const tt=this.terrainCode(f.x,f.y);
-    let t = (tt===FOREST||tt===HILL)?'forest' : (tt===MOUNT)?'mountain' : 'none';
+    let t = (tt===FOREST)?'forest' : (tt===MOUNT)?'mountain' : 'none';
     if(t==='none'){ const cam=CAMO[f.equip?f.equip.camo:'none']; if(cam&&cam.terrain===tt&&cam.terrain!==-1) t=(tt===MOUNT)?'mountain':'forest'; }
     return t; }
   canReveal(v,type){ const vt=this.terrainCode(v.x,v.y); const vis=VISION[v.equip?v.equip.vision:'none']; const r=vis&&vis.reveal;
@@ -518,6 +520,9 @@ class Game {
     this.updateBalls(dt); this.updateMines(); this.updateTurrets(dt); if(this.mode==='ctf') this.updateFlags(dt);
     for(let i=this.decoys.length-1;i>=0;i--){ this.decoys[i].life-=dt; if(this.decoys[i].life<=0) this.decoys.splice(i,1); }
     const ba=this.aliveCount('blue'), ra=this.aliveCount('red');
+    if(![...this.players.values()].some(p=>p.alive)){            // all human players eliminated -> end round
+      let w; if(this.mode==='ctf') w=this.caps.blue>this.caps.red?'blue':this.caps.red>this.caps.blue?'red':'tie'; else w=ba>ra?'blue':ra>ba?'red':'tie';
+      this.endRound(w); return; }
     if(this.mode==='ctf'){ let w=null;
       if(this.caps.blue>=CAPTURE_TARGET) w='blue'; else if(this.caps.red>=CAPTURE_TARGET) w='red';
       else if(this.roundTimer<=0) w=this.caps.blue>this.caps.red?'blue':this.caps.red>this.caps.blue?'red':'tie';
@@ -533,7 +538,7 @@ class Game {
       let dead=b.life<=0, hitX=nx, hitY=ny;
       if(dead) this.emit({type:'splat',x:nx,y:ny,c:b.color});   // reached max range → splat on the ground
       if(!dead) for(const o of this.obstacles){ if(nx>o.x&&nx<o.x+o.w&&ny>o.y&&ny<o.y+o.h){ dead=true; this.emit({type:'splat',x:nx,y:ny,c:b.color}); break; } }
-      if(!dead && dist2(b.x0,b.y0,nx,ny)>625){ const tc=this.terrainCode(nx,ny);   // blocked by mountains/hills/forest (sniper passes forest)
+      if(!dead && !b.lob && dist2(b.x0,b.y0,nx,ny)>625){ const tc=this.terrainCode(nx,ny);   // blocked by mountains/hills/forest (sniper passes forest; lobbed grenades fly over)
         if(tc===MOUNT||tc===HILL||(tc===FOREST&&!b.pforest)){ dead=true; this.emit({type:'splat',x:nx,y:ny,c:b.color}); } }
       if(!dead) for(const f of fighters){ if(!f.alive||f.id===b.owner||f.team===b.team) continue;
         if(dist2(nx,ny,f.x,f.y)<(f.r+b.r)*(f.r+b.r)){ this.applyDamage(f,b.dmg,this.findById(b.owner),b.pierce); dead=true; hitX=f.x; hitY=f.y; break; } }

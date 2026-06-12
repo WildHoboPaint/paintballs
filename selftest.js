@@ -53,7 +53,7 @@ ok('basic gun range is short (<=300)', G.WEAPONS.pball_gun.range<=300);
 ok('rifle out-ranges the basic gun', G.WEAPONS.pball_rifle.range>G.WEAPONS.pball_gun.range);
 ok('paintballs slowed (<=500)', G.AMMO.normal.speed<=500);
 ok('paintballs much slower now (<=240)', G.AMMO.normal.speed<=240);
-ok('grenade launcher exists with big splash', !!(G.WEAPONS.grenade_launcher && G.WEAPONS.grenade_launcher.splash>=80));
+ok('grenade launcher exists with splash', !!(G.WEAPONS.grenade_launcher && G.WEAPONS.grenade_launcher.splash>=40));
 ok('rocket launcher has big splash', G.WEAPONS.bazooka.splash>=90);
 ok('bots respect terrain (clearShot present)', typeof g.clearShot==='function');
 

@@ -62,6 +62,11 @@
   #btnReady{position:absolute; top:90px; right:16px; pointer-events:auto; background:rgba(8,11,16,.7); border:1px solid #2e3d4d; color:#9be36a; border-radius:8px; padding:7px 12px; font-size:13px; font-weight:700; cursor:pointer; font-family:inherit}
   #btnReady:hover{border-color:var(--accent)}
   #btnReady.out{color:#ffb84d; border-color:#7a5a1a}
+  #chat{position:absolute; left:14px; bottom:128px; width:330px; max-width:46vw; z-index:12; pointer-events:none}
+  #chatlog{display:flex; flex-direction:column; gap:3px; margin-bottom:6px; font-size:13px; font-weight:600}
+  #chatlog .cm{background:rgba(8,11,16,.55); padding:2px 8px; border-radius:6px; align-self:flex-start; max-width:100%; text-shadow:0 1px 2px #000}
+  #chatInput{pointer-events:auto; width:100%; box-sizing:border-box; background:rgba(8,11,16,.8); border:1px solid #2e3d4d; color:#dce8f2; border-radius:8px; padding:6px 10px; font-size:13px; font-weight:600; font-family:inherit; opacity:.45; transition:opacity .15s}
+  #chatInput:focus{opacity:1; border-color:var(--accent); outline:none}
   #elim{position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px}
   #elim .big{font-size:44px; font-weight:900; color:#ff5470; text-shadow:0 2px 12px #000}
   #elim .small{font-size:15px; color:#cdd}
@@ -105,6 +110,7 @@
     <button id="btnShop">🛒 Loadout <kbd>B</kbd></button>
     <button id="btnPeek">⤢ Look <kbd>Tab</kbd></button>
     <button id="btnReady">✓ Ready</button>
+    <div id="chat"><div id="chatlog"></div><input id="chatInput" maxlength="160" placeholder="Press Enter to chat" autocomplete="off"></div>
     <div id="lowerleft">
       <div id="hpwrap">
         <div class="lab"><span id="clsName">Trooper</span><span title="Armor bounce chance — otherwise one hit is out"><span id="hpNum">0%</span> deflect</span></div>
@@ -191,7 +197,7 @@ let snap=null, view=new Map(), splats=[], feed=[], toasts=[], cam={x:0,y:0}, con
 let ter=null, terMini=null; const keys={}, mouse={x:0,y:0,down:false}; let reloadFlag=false, deployFlag=false;
 let shopOpenedBy=null, activeTab='class';
 let lobby=null, lobbyCanvas=null, freeCam={x:0,y:0}, storeCats=null;
-let actx=null, muted=false, prevAmmo=null, bannerT=null; let peek=false; let myPos=null;
+let actx=null, muted=false, prevAmmo=null, bannerT=null; let peek=false; let myPos=null; let chat=[];
 function aud(){ if(!actx){ try{ actx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } return actx; }
 function blip(type,freq,dur,vol,ramp){ if(muted) return; const a=aud(); if(!a) return; try{ const o=a.createOscillator(),g=a.createGain(); o.type=type; o.frequency.value=freq; if(ramp) o.frequency.exponentialRampToValueAtTime(Math.max(30,freq+ramp),a.currentTime+dur); g.gain.value=vol; g.gain.exponentialRampToValueAtTime(0.0001,a.currentTime+dur); o.connect(g); g.connect(a.destination); o.start(); o.stop(a.currentTime+dur); }catch(e){} }
 const sfx={
@@ -209,7 +215,8 @@ const TC=['#2f6b32','#1d4a22','#245f7e','#6f6657'];
 const TAB_LABELS={class:'Class',weapon:'Weapon',armor:'Armor',vision:'Vision',camo:'Camo',gadget:'Gadget',ammo:'Ammo'};
 const CLS_COLORS={Trooper:'#cbd5e1',VetTrooper:'#7dd3fc',HeavyWeapons:'#ff8c42',Scout:'#9b5de5',Infiltrator:'#06d6a0',Sniper:'#ef476f',Engineer:'#ffd166',Officer:'#3da9fc'};
 
-addEventListener('keydown',e=>{ const k=e.key.toLowerCase(); keys[k]=true;
+addEventListener('keydown',e=>{ if(e.target && (e.target.id==='chatInput'||e.target.id==='nameIn'||e.target.id==='passIn')) return; const k=e.key.toLowerCase(); keys[k]=true;
+  if(connected && k==='enter'){ e.preventDefault(); const ci=$('chatInput'); if(ci) ci.focus(); return; }
   if(k==='r') reloadFlag=true; if(k==='g') deployFlag=true;
   if(connected && k==='b') toggleShop('manual');
   if(connected && k==='e' && snap && snap.you && snap.you.zone && $('shop').classList.contains('hidden')) openStore(snap.you.zone);
@@ -242,6 +249,8 @@ function connect(create){
   ws.onerror=()=>{ $('status').textContent='Connection error. Is the server running?'; };
 }
 function send(o){ if(ws&&ws.readyState===1) ws.send(JSON.stringify(o)); }
+function esc(s){ return (''+s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function isTyping(){ const a=document.activeElement; return !!(a && a.id==='chatInput'); }
 
 function onMsg(m){
   if(m.t==='welcome'){ myId=m.id; arena=m.arena; obstacles=m.obstacles||[]; terrain=m.terrain; catalog=m.catalog; classesInfo=m.classes; unlockLevel=m.unlockLevel||10; lobby=m.lobby||null;
@@ -253,6 +262,7 @@ function onMsg(m){
       else { const dx=m.you.x-myPos.x, dy=m.you.y-myPos.y, d=Math.hypot(dx,dy); if(d>120){ myPos.x=m.you.x; myPos.y=m.you.y; } else { myPos.x+=dx*0.2; myPos.y+=dy*0.2; } } }
     if(m.events) for(const ev of m.events) handleEvent(ev); }
   else if(m.t==='authfail'){ $('status').textContent='⚠ '+(m.msg||'Login failed'); try{ws.close();}catch(e){} connected=false; }
+  else if(m.t==='chat'){ chat.push({from:m.from,team:m.team,text:m.text,t:14}); if(chat.length>10) chat.shift(); }
   else if(m.t==='buyresult'){ if(m.money!=null) $('shopWallet').textContent=m.money; if(m.msg) toast(m.ok?('✅ '+m.msg):('❌ '+m.msg)); buildGrid(); }
   else if(m.t==='classresult'){ if(!m.ok && m.msg) toast('❌ '+m.msg); buildGrid(); }
 }
@@ -265,7 +275,7 @@ function handleEvent(ev){
     if(ev.vtId===myId) sfx.hurt(); }
   else if(ev.type==='msg') toast(ev.text);
   else if(ev.type==='capture'){ const mine=snap&&snap.you&&ev.team===snap.you.team; showBanner((mine?'FLAG CAPTURED ':'ENEMY SCORED ')+(ev.caps?ev.caps.blue+'–'+ev.caps.red:''), mine?'#9be36a':'#ff6b6b'); sfx.level(); toast('🚩 '+ev.by+' scored for '+ev.team.toUpperCase()+'!'); }
-  else if(ev.type==='flaggrab'){ toast('🚩 '+ev.by+' grabbed the '+ev.team.toUpperCase()+' flag!'); }
+  else if(ev.type==='flaggrab'){ const mine=snap&&snap.you&&ev.team===snap.you.team; if(mine){ showBanner('⚠ YOUR FLAG TAKEN!','#ff6b6b'); sfx.hurt(); toast('⚠ '+ev.by+' grabbed YOUR flag — stop them!'); } else toast('🚩 '+ev.by+' grabbed the '+ev.team.toUpperCase()+' flag!'); }
   else if(ev.type==='flagreturn'){ toast('🚩 '+ev.team.toUpperCase()+' flag returned.'); }
   else if(ev.type==='afk'){ if(ev.id===myId){ showBanner('SET TO SITTING OUT','#ffb84d'); toast('Inactive 2 rounds — set to Sitting Out. Press Y or click Ready to rejoin.'); } }
   else if(ev.type==='levelup'){ if(ev.id===myId){ sfx.level(); if(ev.unlocked) showBanner('CLASS UNLOCKED','#ffd166'); toast(ev.unlocked?'⭐ LEVEL 10! Class selection unlocked — open Loadout (B)':('⬆ Level '+ev.level+'!')); } }
@@ -335,7 +345,7 @@ function drawTile(c,code,x,y,t){
 
 setInterval(()=>{
   if(!connected||!snap||!snap.you) return;
-  const overlay=!$('shop').classList.contains('hidden');
+  const overlay=!$('shop').classList.contains('hidden')||isTyping();
   let mx=0,my=0;
   if(!overlay){ if(keys['w']||keys['arrowup'])my-=1; if(keys['s']||keys['arrowdown'])my+=1; if(keys['a']||keys['arrowleft'])mx-=1; if(keys['d']||keys['arrowright'])mx+=1; }
   // eliminated mid-round → free-roam spectator camera (don't drive a player)
@@ -357,7 +367,7 @@ requestAnimationFrame(frame);
 
 function ease(dt){
   if(snap && snap.phase==='active' && snap.you && snap.you.alive && myPos){
-    const overlay=!$('shop').classList.contains('hidden'); let mx=0,my=0;
+    const overlay=!$('shop').classList.contains('hidden')||isTyping(); let mx=0,my=0;
     if(!overlay){ if(keys['w']||keys['arrowup'])my-=1; if(keys['s']||keys['arrowdown'])my+=1; if(keys['a']||keys['arrowleft'])mx-=1; if(keys['d']||keys['arrowright'])mx+=1; }
     if(mx||my){ const mm2=Math.hypot(mx,my), sp=snap.you.spd||120; myPos.x+=mx/mm2*sp*dt; myPos.y+=my/mm2*sp*dt;
       myPos.x=clamp(myPos.x,54,arena.w-54); myPos.y=clamp(myPos.y,54,arena.h-54); }
@@ -495,7 +505,8 @@ function hud(){
   $('sBlue').textContent=s.roundsWon.blue; $('sRed').textContent=s.roundsWon.red;
   if(s.phase==='active'){ const m=Math.floor(s.roundTime/60),ss=s.roundTime%60;
     let line=`${(s.modeName||'').toUpperCase()} · ${m}:${ss<10?'0':''}${ss}`;
-    if(s.mode==='ctf') line+=` · BLUE ${s.caps?s.caps.blue:0} – ${s.caps?s.caps.red:0} RED (first to ${s.captureTarget||3})`;
+    if(s.mode==='ctf'){ line+=` · BLUE ${s.caps?s.caps.blue:0} – ${s.caps?s.caps.red:0} RED (first to ${s.captureTarget||3})`;
+      const mt=s.you&&s.you.team, mf=(s.flags||[]).find(fl=>fl.team===mt); if(mf&&!mf.home) line+='  ⚠ YOUR FLAG IS OUT'; }
     else if(s.mode==='invaders') line+=` · YOU ${s.alive.blue} vs BOTS ${s.alive.red}`;
     else line+=` · BLUE ${s.alive.blue} vs RED ${s.alive.red}`;
     if(s.tournament) line=`🏆 TOURNAMENT Bo5 ${s.roundsWon.blue}–${s.roundsWon.red} · `+line;
@@ -514,6 +525,7 @@ function hud(){
   }
   $('killfeed').innerHTML=feed.map(k=>{ const bc=k.byTeam==='blue'?'#6ad0ff':'#ff8aa0',vc=k.vtTeam==='blue'?'#6ad0ff':'#ff8aa0'; const rwd=(k.byId===myId&&k.rew)?` <span style="color:#ffd166">+${k.rew}💰 +${k.xp}XP</span>`:''; return `<div><b style="color:${bc}">${k.by}</b> <span style="color:#ffd166">splatted</span> <b style="color:${vc}">${k.vt}</b>${rwd}</div>`; }).join('');
   $('toasts').innerHTML=toasts.map(t=>`<div class="toast">${t.text}</div>`).join('');
+  { const cl=$('chatlog'); if(cl) cl.innerHTML=chat.map(c=>`<div class="cm"><b style="color:${c.team==='blue'?'#6ad0ff':'#ff8aa0'}">${esc(c.from)}</b>: ${esc(c.text)}</div>`).join(''); }
   const banner=$('elim');
   if(lob){ banner.classList.remove('hidden'); banner.style.justifyContent='flex-end';
     const z=s.you&&s.you.zone;
@@ -527,7 +539,7 @@ function hud(){
   } else banner.classList.add('hidden');
   if(!$('shop').classList.contains('hidden')) updateShopLive();
 }
-function decay(dt){ for(let i=feed.length-1;i>=0;i--){feed[i].t-=dt; if(feed[i].t<=0)feed.splice(i,1);} for(let i=toasts.length-1;i>=0;i--){toasts[i].t-=dt; if(toasts[i].t<=0)toasts.splice(i,1);} }
+function decay(dt){ for(let i=feed.length-1;i>=0;i--){feed[i].t-=dt; if(feed[i].t<=0)feed.splice(i,1);} for(let i=toasts.length-1;i>=0;i--){toasts[i].t-=dt; if(toasts[i].t<=0)toasts.splice(i,1);} for(let i=chat.length-1;i>=0;i--){chat[i].t-=dt; if(chat[i].t<=0)chat.splice(i,1);} }
 
 function openShop(by){ shopOpenedBy=by; storeCats=null; activeTab='class'; $('shop').classList.remove('hidden'); buildTabs(); buildGrid(); }
 function openStore(zoneId){ storeCats = zoneId==='armory' ? ['weapon','ammo'] : ['armor','vision','camo','gadget','class']; activeTab=storeCats[0]; shopOpenedBy='zone'; $('shop').classList.remove('hidden'); buildTabs(); buildGrid(); updateShopLive(); }
@@ -537,6 +549,7 @@ $('btnShop').onclick=()=>toggleShop('manual'); $('shopClose').onclick=closeShop;
 function setPeekBtn(){ const b=$('btnPeek'); if(b) b.classList.toggle('on',peek); }
 $('btnPeek').onclick=()=>{ peek=!peek; setPeekBtn(); toast(peek?'🔍 Pan mode ON — move mouse to look around':'Pan mode off'); };
 $('btnReady').onclick=()=>{ if(snap&&snap.you) send({t:'ready', on:!(snap.you.ready!==false)}); };
+$('chatInput').addEventListener('keydown',e=>{ e.stopPropagation(); if(e.key==='Enter'){ const v=$('chatInput').value.trim(); if(v) send({t:'chat',text:v}); $('chatInput').value=''; $('chatInput').blur(); } else if(e.key==='Escape'){ $('chatInput').value=''; $('chatInput').blur(); } });
 $('anteBtn').onclick=()=>{ if(snap&&snap.you) send({t:'ante', on:!snap.you.wantAnte, amt:snap.you.anteAmt||100}); };
 $('anteAmt').onclick=()=>{ if(!snap||!snap.you) return; const opts=snap.anteOptions||[100,500,1000]; const cur=snap.you.anteAmt||opts[0]; const next=opts[(opts.indexOf(cur)+1)%opts.length]; send({t:'ante', on:snap.you.wantAnte, amt:next}); };
 function buildTabs(){ const t=$('tabs'); t.innerHTML=''; const cats=storeCats||['class','weapon','armor','vision','camo','gadget','ammo'];
