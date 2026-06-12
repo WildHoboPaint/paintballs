@@ -177,6 +177,12 @@ class Conn {
         this.send({ t:'anteresult', ...r });
         break;
       }
+      case 'ready': {
+        if (this.playerId == null) return;
+        const r = game.setReady(this.playerId, !!msg.on);
+        this.send({ t:'readyresult', ...r });
+        break;
+      }
     }
   }
 }
