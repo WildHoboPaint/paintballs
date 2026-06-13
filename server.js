@@ -147,6 +147,7 @@ class Conn {
   }
   handle(msg) {
     switch (msg.t) {
+      case 'ping': this.send({ t:'pong', ts: msg.ts }); break;   // RTT measurement (no auth needed)
       case 'join': {
         if (this.playerId != null) return;
         const auth = msg.create ? game.registerAccount(msg.name, msg.pass) : game.loginAccount(msg.name, msg.pass);

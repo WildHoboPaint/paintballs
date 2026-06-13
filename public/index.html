@@ -197,7 +197,7 @@ let snap=null, view=new Map(), splats=[], feed=[], toasts=[], cam={x:0,y:0}, con
 let ter=null, terMini=null; const keys={}, mouse={x:0,y:0,down:false}; let reloadFlag=false, deployFlag=false, goldenFlag=false;
 let shopOpenedBy=null, activeTab='class', myLoadout=null, loadCfg=null, classUnlock=null;
 let lobby=null, lobbyCanvas=null, freeCam={x:0,y:0}, storeCats=null;
-let actx=null, muted=false, prevAmmo=null, prevClip=null, bannerT=null; let peek=false; let myPos=null; let chat=[]; const CLIENT_BUILD='hvpb-2026.06.14.8';
+let actx=null, muted=false, prevAmmo=null, prevClip=null, bannerT=null; let peek=false; let myPos=null; let chat=[]; const CLIENT_BUILD='hvpb-2026.06.14.10';
 function aud(){ if(!actx){ try{ actx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } return actx; }
 function blip(type,freq,dur,vol,ramp){ if(muted) return; const a=aud(); if(!a) return; try{ const o=a.createOscillator(),g=a.createGain(); o.type=type; o.frequency.value=freq; if(ramp) o.frequency.exponentialRampToValueAtTime(Math.max(30,freq+ramp),a.currentTime+dur); g.gain.value=vol; g.gain.exponentialRampToValueAtTime(0.0001,a.currentTime+dur); o.connect(g); g.connect(a.destination); o.start(); o.stop(a.currentTime+dur); }catch(e){} }
 const sfx={
@@ -235,6 +235,8 @@ cv.addEventListener('contextmenu',e=>e.preventDefault());   // right-click no lo
 
 $('loginBtn').onclick=()=>connect(false); $('regBtn').onclick=()=>connect(true);
 ;(function(){ const d=document.createElement('div'); d.id='ver'; d.style.cssText='position:fixed;right:8px;bottom:6px;font:600 11px Segoe UI,sans-serif;color:#5b6b7a;z-index:50;pointer-events:none'; d.textContent='build '+CLIENT_BUILD; document.body.appendChild(d); })();
+let pingMs=null;
+;(function(){ const d=document.createElement('div'); d.id='pingv'; d.style.cssText='position:fixed;right:8px;bottom:22px;font:600 11px Segoe UI,sans-serif;color:#5b6b7a;z-index:50;pointer-events:none'; d.textContent='ping'; document.body.appendChild(d); })();
 $('nameIn').addEventListener('keydown',e=>{ if(e.key==='Enter') $('passIn').focus(); });
 $('passIn').addEventListener('keydown',e=>{ if(e.key==='Enter') connect(false); });
 $('advToggle').onclick=()=>$('advRow').classList.toggle('hidden');
@@ -275,6 +277,7 @@ function onMsg(m){
   else if(m.t==='voteresult'){ if(!$('shop').classList.contains('hidden') && activeTab==='modes') buildGrid(); }
   else if(m.t==='upgraderesult'){ if(m.money!=null) $('shopWallet').textContent=m.money; if(m.tiers&&snap&&snap.you) snap.you.tiers=m.tiers; if(m.msg) toast(m.ok?('✅ '+m.msg):('❌ '+m.msg)); if(!$('shop').classList.contains('hidden')){buildGrid();} }
   else if(m.t==='classupresult'){ if(m.money!=null) $('shopWallet').textContent=m.money; if(m.classTiers&&snap&&snap.you) snap.you.classTiers=m.classTiers; if(m.msg) toast(m.ok?('✅ '+m.msg):('❌ '+m.msg)); if(!$('shop').classList.contains('hidden')){buildGrid();} }
+  else if(m.t==='pong'){ pingMs=Math.max(0,Math.round(performance.now()-m.ts)); const d=$('pingv'); if(d){ d.textContent='ping '+pingMs+' ms'; d.style.color=pingMs<80?'#5b8c5b':(pingMs<160?'#caa44a':'#c46a6a'); } }
 }
 function handleEvent(ev){
   if(ev.type==='splat') addSplat(ev.x,ev.y,ev.c);
@@ -371,6 +374,7 @@ setInterval(()=>{
   const canFight = snap.phase==='active' && !overlay;
   send({t:'input',mx,my,aim,aimDist,fire:mouse.down&&canFight,reload:reloadFlag,deploy:deployFlag&&canFight,armGolden:goldenFlag}); reloadFlag=false; deployFlag=false; goldenFlag=false;
 },33);
+setInterval(()=>{ if(connected && ws && ws.readyState===1) send({t:'ping',ts:performance.now()}); }, 2000);
 
 let lastT=performance.now();
 function frame(t){ requestAnimationFrame(frame); const dt=Math.min(0.05,(t-lastT)/1000)||0; lastT=t; try{ if(connected&&snap){ ease(dt); draw(); hud(); decay(dt); } }catch(e){ console.error(e); } }
@@ -430,6 +434,16 @@ function drawStage(s){
     else { ctx.fillStyle='#5b5048'; ctx.fillRect(bx,by,bw,bh); } ctx.restore(); };
   ring(s.x-t,s.y-t,s.w+2*t,t); ring(s.x-t,s.y+s.h,s.w+2*t,t); ring(s.x-t,s.y,t,s.h); ring(s.x+s.w,s.y,t,s.h);
   ctx.fillStyle='rgba(255,255,255,.5)'; ctx.font='bold 18px Segoe UI'; ctx.textAlign='center'; ctx.textBaseline='bottom'; ctx.fillText('STAGING AREA', s.x+s.w/2, s.y-14);
+  if(s.record){ const rw=Math.min(280,s.w*0.62), rh=66, rx=s.x+s.w/2-rw/2, ry=s.y+Math.max(14,s.h*0.10);
+    ctx.save();
+    ctx.fillStyle='rgba(12,9,5,.62)'; ctx.fillRect(rx,ry,rw,rh);
+    ctx.fillStyle='rgba(0,0,0,.28)'; ctx.fillRect(rx+4,ry+rh-6,rw-8,4);
+    ctx.strokeStyle='rgba(255,210,120,.55)'; ctx.lineWidth=2; ctx.strokeRect(rx,ry,rw,rh);
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillStyle='#ffd166'; ctx.font='bold 13px Segoe UI'; ctx.fillText('🏆 HIGHEST BOT WAVE', rx+rw/2, ry+15);
+    ctx.fillStyle='#ffffff'; ctx.font='bold 24px Segoe UI'; ctx.fillText('Wave '+((s.record.wave)||0), rx+rw/2, ry+38);
+    ctx.fillStyle='rgba(230,237,243,.85)'; ctx.font='12px Segoe UI'; ctx.fillText(s.record.wave?('held by '+(s.record.name||'?')):'unclaimed, be the first', rx+rw/2, ry+56);
+    ctx.restore(); }
   if(s.zones) for(const z of s.zones) drawStore(ctx,z);
 }
 

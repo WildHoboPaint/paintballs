@@ -46,7 +46,7 @@ const MAXTIER=5, BOT_TIER=3, SNIPER_BLIND=160; const TIER_COST={2:600,3:1200,4:2
 const HEAVY_CLASSES=['VetTrooper','HeavyWeapons','Officer'];
 function weightCapacity(level){ return 8 + Math.floor(level/5)*2; }
 const LEVELUP_BONUS=20;                 // coins per level gained
-const BUILD='hvpb-2026.06.14.8';        // bump on each change; shown in-game to verify deploys
+const BUILD='hvpb-2026.06.14.10';        // bump on each change; shown in-game to verify deploys
 
 // progression
 const CLASS_UNLOCK_LEVEL=10, LVL_BASE=2, LVL_STEP=1;
@@ -85,16 +85,16 @@ const CLASS_KEYS = Object.keys(CLASSES);
 
 // ---- catalog (modern, flat). cost 0 = free/default. classes:'all' or list. ----
 const WEAPONS = {
-  pball_gun:    { name:"Paintball Gun",    cost:0,    dmg:1, fireRate:1050, spread:0.05, mag:25, range:260, reload:1.6, proj:1, desc:"Short range starter — upgrade to reach further." },
-  pball_rifle:  { name:"Paintball Rifle",  cost:350,  dmg:1, fireRate:870, spread:0.035,mag:25, range:420, reload:1.7, proj:1, desc:"More range and a steadier shot." },
-  assault_rifle:{ name:"Assault Rifle",    cost:1000, dmg:1, fireRate:410, spread:0.06, mag:30, range:380, reload:1.9, proj:1, desc:"Rapid fire, medium range." },
-  sniper_rifle: { name:"Sniper Rifle",     cost:1200, dmg:1, fireRate:1650,spread:0.004,mag:10, range:780, reload:2.0, proj:1, scope:true, desc:"Sees across the map (no terrain in the way) but blind up close. Very slow fire." },
-  minigun:      { name:"Minigun",          cost:1500, dmg:1, fireRate:220, spread:0.12, mag:50, range:340, reload:3.0, proj:1, desc:"Torrent of paint, short range." },
+  pball_gun:    { name:"Paintball Gun",    cost:0,    dmg:1, fireRate:950, spread:0.05, mag:25, range:260, reload:1.6, proj:1, desc:"Short range starter — upgrade to reach further." },
+  pball_rifle:  { name:"Paintball Rifle",  cost:350,  dmg:1, fireRate:780, spread:0.035,mag:25, range:420, reload:1.7, proj:1, desc:"More range and a steadier shot." },
+  assault_rifle:{ name:"Assault Rifle",    cost:1000, dmg:1, fireRate:360, spread:0.06, mag:30, range:380, reload:1.9, proj:1, desc:"Rapid fire, medium range." },
+  sniper_rifle: { name:"Sniper Rifle",     cost:1200, dmg:1, fireRate:1500,spread:0.004,mag:10, range:780, reload:2.0, proj:1, scope:true, desc:"Sees across the map (no terrain in the way) but blind up close. Very slow fire." },
+  minigun:      { name:"Minigun",          cost:1500, dmg:1, fireRate:190, spread:0.12, mag:50, range:340, reload:3.0, proj:1, desc:"Torrent of paint, short range." },
   bazooka:      { name:"Rocket Launcher",  cost:1500, dmg:1, fireRate:2800,spread:0.03, mag:5,  range:600, reload:2.8, proj:1, splash:140, pspeed:130, desc:"Very slow to move & fire — huge area splat, blocked by terrain." },
-  grenade_launcher:{ name:"Grenade Launcher", cost:1300, dmg:1, fireRate:1750, spread:0.05, mag:5, range:360, reload:2.4, proj:1, splash:48, pspeed:110, lob:true, desc:"Lobbed grenade — very slow, flies over terrain, ~3-tile splat." },
-  shotgun:      { name:"Shotgun",          cost:800,  dmg:1, fireRate:1100, spread:0.32, mag:15, range:190, reload:1.9, proj:3, desc:"3-pellet spread, very short range." },
-  blowgun:      { name:"Blowgun",          cost:600,  dmg:1, fireRate:980, spread:0.025,mag:20, range:360, reload:1.5, proj:1, silent:true, desc:"Silent darts, medium range." },
-  auto_pistol:  { name:"Auto Pistol",      cost:500,  dmg:1, fireRate:560, spread:0.05, mag:20, range:250, reload:1.2, proj:1, desc:"Quick, light, short range." },
+  grenade_launcher:{ name:"Grenade Launcher", cost:1300, dmg:1, fireRate:1600, spread:0.05, mag:5, range:360, reload:2.4, proj:1, splash:48, pspeed:110, lob:true, desc:"Lobbed grenade — very slow, flies over terrain, ~3-tile splat." },
+  shotgun:      { name:"Shotgun",          cost:800,  dmg:1, fireRate:1000, spread:0.32, mag:15, range:190, reload:1.9, proj:3, desc:"3-pellet spread, very short range." },
+  blowgun:      { name:"Blowgun",          cost:600,  dmg:1, fireRate:880, spread:0.025,mag:20, range:360, reload:1.5, proj:1, silent:true, desc:"Silent darts, medium range." },
+  auto_pistol:  { name:"Auto Pistol",      cost:500,  dmg:1, fireRate:480, spread:0.05, mag:20, range:250, reload:1.2, proj:1, desc:"Quick, light, short range." },
 };
 const WEAPON_MODS = {
   magazine: { name:"Magazine",    cost:900,  wt:2, ammo:30, desc:"+30 paintballs to your round pool." },
@@ -173,6 +173,7 @@ class Game {
     this.tiers=(saved&&saved.tiers)?Object.assign({},saved.tiers):{};   // account key -> { weaponId: tier }
     this.classTiers=(saved&&saved.classTiers)?Object.assign({},saved.classTiers):{};   // account key -> { className: tier }
     this.prefs=(saved&&saved.prefs)?Object.assign({},saved.prefs):{};   // account key -> { cls, equip, modeVotes } (persist across logins)
+    this.waveRecord=(saved&&saved.waveRecord)?saved.waveRecord:{wave:0,name:''};   // highest Bot Invaders wave + who reached it
     this.inv=(saved&&saved.inv)?Object.assign({},saved.inv):{};         // account key -> { 'wmod:scope':2, 'chip:camo':1 }
     if(!(saved&&saved.inv)){ for(const k in this.owned){ for(const s of (this.owned[k]||[])){ if(s.indexOf('wmod:')===0||s.indexOf('chip:')===0){ (this.inv[k]||(this.inv[k]={}))[s]=1; } } } }
     this.owned  =(saved&&saved.owned)  ?Object.assign({},saved.owned)  :{};   // key -> ["weapon:assault_rifle", ...]
@@ -196,7 +197,7 @@ class Game {
     if(cat==='wmod'||cat==='chip') return (((this.inv[p.key]||{})[cat+':'+id])||0)>0;
     return this.ownedSet(p.key).includes(cat+':'+id); }
   invCount(p,catid){ return ((this.inv[p.key]||{})[catid])||0; }
-  serialize(){ return { wallets:this.wallets, owned:this.owned, xp:this.xp, accounts:this.accounts, tiers:this.tiers, inv:this.inv, classTiers:this.classTiers, prefs:this.prefs }; }
+  serialize(){ return { wallets:this.wallets, owned:this.owned, xp:this.xp, accounts:this.accounts, tiers:this.tiers, inv:this.inv, classTiers:this.classTiers, prefs:this.prefs, waveRecord:this.waveRecord }; }
   savePrefs(p){ if(!p||p.bot||!p.key) return; this.prefs[p.key]={ cls:p.cls, equip:{weapon:p.equip.weapon,wmods:(p.equip.wmods||[]).slice(),chips:(p.equip.chips||[]).slice(),gadget:p.equip.gadget}, modeVotes:Object.assign({},p.modeVotes||{}) }; }
   restorePrefs(f){ const pr=this.prefs[f.key]; if(!pr) return;
     if(pr.cls && CLASSES[pr.cls] && this.getLevel(f)>=(CLASS_UNLOCK[pr.cls]||1)) f.cls=pr.cls;
@@ -529,7 +530,9 @@ class Game {
       const bmul=this.superRound?2:1, cleared=(winner==='blue');
       for(const p of this.players.values()){ const bonus=((p.roundKills||0)*BOT_BONUS+(p.alive?SURVIVOR_BONUS:0))*bmul; if(bonus) this.addMoney(p,bonus); }
       if(this.superRound){ this.superRound=false; this.doubleRewards=false; this.emit({type:'msg',text:cleared?'SUPER Invaders cleared — double rewards paid!':'Super Invaders overran you.'}); }
-      else if(cleared){ this.invWave++; this.emit({type:'msg',text:`Wave cleared! Wave ${this.invWave} incoming…`}); }
+      else if(cleared){
+        if(this.invWave>(this.waveRecord.wave||0)){ let top=null; for(const pl of this.players.values()){ if(pl.bot)continue; if(!top||(pl.kills||0)>(top.kills||0)) top=pl; } this.waveRecord={wave:this.invWave,name:top?top.name:'—'}; this.emit({type:'msg',text:`New record! Wave ${this.invWave} reached by ${this.waveRecord.name}.`}); }
+        this.invWave++; this.emit({type:'msg',text:`Wave cleared! Wave ${this.invWave} incoming…`}); }
       else { this.emit({type:'msg',text:`Overrun on wave ${this.invWave} — invasion reset.`}); this.invWave=1; this.invSession=false; }
     } else if(winner!=='tie' && !this.tournament){
       for(const p of this.players.values()) if(p.team===winner){ this.addMoney(p,ROUND_WIN_BONUS); if(p.alive) this.addMoney(p,SURVIVOR_BONUS); }
@@ -551,8 +554,8 @@ class Game {
   }
   stageRect(){ const w=Math.min(440,Math.round(ARENA.w*0.30)), h=Math.min(340,Math.round(ARENA.h*0.30)); return { x:Math.round(ARENA.w/2-w/2), y:Math.round(ARENA.h/2-h/2), w, h }; }
   stageZones(s){ s=s||this.stageRect(); const zw=Math.min(120,Math.round(s.w*0.22)), zh=Math.min(120,Math.round(s.h*0.26));
-    return [ {id:'armory',name:'Armory',   x:Math.round(s.x+s.w*0.16),y:Math.round(s.y+s.h*0.30),w:zw,h:zh},
-             {id:'equip', name:'Equipment',x:Math.round(s.x+s.w*0.62),y:Math.round(s.y+s.h*0.30),w:zw,h:zh} ]; }
+    return [ {id:'armory',name:'Armory',   x:Math.round(s.x+s.w*0.16),y:Math.round(s.y+s.h*0.60),w:zw,h:zh},
+             {id:'equip', name:'Equipment',x:Math.round(s.x+s.w*0.62),y:Math.round(s.y+s.h*0.60),w:zw,h:zh} ]; }
   placeLobby(){ const s=this.stageRect(); let i=0; for(const p of this.players.values()){ p.x=s.x+s.w/2+((i%6)-2.5)*46; p.y=s.y+s.h-60; p.alive=true; p.zone=null; i++; } }
   moveInLobby(p,dt){
     const s=this.stageRect(), zs=this.stageZones(s);
@@ -643,6 +646,7 @@ class Game {
       this.endRound(w); return; }
     if(this.mode==='ctf'){ let w=null;
       if(this.caps.blue>=CAPTURE_TARGET) w='blue'; else if(this.caps.red>=CAPTURE_TARGET) w='red';
+      else if(ba===0||ra===0) w=ba>ra?'blue':ra>ba?'red':(this.caps.blue>this.caps.red?'blue':this.caps.red>this.caps.blue?'red':'tie');   // one side wiped out -> round over
       else if(this.roundTimer<=0) w=this.caps.blue>this.caps.red?'blue':this.caps.red>this.caps.blue?'red':'tie';
       if(w) this.endRound(w);
     } else if(this.mode==='invaders'){
@@ -718,7 +722,7 @@ class Game {
         x:Math.round(me.x),y:Math.round(me.y),terrain:this.terrainCode(me.x,me.y),wantAnte:me.wantAnte,anteIn:me.anteIn,
         level:li.level, xpInto:li.into, xpNeed:li.need, unlockLevel:CLASS_UNLOCK_LEVEL, classUnlocked:li.level>=CLASS_UNLOCK_LEVEL,
         deflect:st.deflect, zone:me.zone||null, equip:me.equip, owned:this.ownedSet(me.key), inv:this.inv[me.key]||{}, mineCharges:me.mineCharges, hasTurret:me.hasTurret, gadget:me.equip.gadget, weight:st.weight, weightCap:weightCapacity(li.level), golden:st.golden, goldenReady:(me.goldenCD||0)<=0, goldenArmed:!!me.goldenArmed, anteAmt:me.anteAmt||100, wantAnte:me.wantAnte, ready:me.ready!==false, modeVotes:me.modeVotes||{}, tiers:this.tiers[me.key]||{}, classTiers:this.classTiers[me.key]||{}, classTier:this.classTierOf(me), spd:Math.round(st.speed*(me.equip.gadget==='jetpack'?1:(SPEED_MULT[this.terrainCode(me.x,me.y)]||1))) }; }
-    let stage=null; if(lobby){ stage=this.stageRect(); stage.zones=this.stageZones(stage); }
+    let stage=null; if(lobby){ stage=this.stageRect(); stage.zones=this.stageZones(stage); stage.record=this.waveRecord; }
     return { t:'state', you, fighters:out, radar, balls:this.balls.map(b=>({x:Math.round(b.x),y:Math.round(b.y),c:b.color})),
       turrets, mines, decoys, space:'arena', stage, phase:this.phase, phaseTimer:Math.max(0,Math.round(this.phaseTimer)),
       roundTime:Math.max(0,Math.round(this.roundTimer)), round:this.roundNum, roundsWon:this.roundsWon,
