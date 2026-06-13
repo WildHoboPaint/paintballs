@@ -65,8 +65,8 @@
   #chat{position:absolute; left:50%; transform:translateX(-50%); bottom:14px; width:440px; max-width:80vw; z-index:12; pointer-events:none; text-align:center}
   #chatlog{display:flex; flex-direction:column; gap:3px; margin-bottom:6px; font-size:13px; font-weight:600; align-items:center}
   #chatlog .cm{background:rgba(8,11,16,.6); padding:2px 10px; border-radius:6px; max-width:100%; text-shadow:0 1px 2px #000}
-  #chatInput{pointer-events:auto; width:100%; box-sizing:border-box; background:rgba(8,11,16,.82); border:1px solid #2e3d4d; color:#dce8f2; border-radius:8px; padding:6px 12px; font-size:13px; font-weight:600; font-family:inherit; text-align:center; opacity:.4; transition:opacity .15s}
-  #chatInput:focus{opacity:1; border-color:var(--accent); outline:none; text-align:left}
+  #chatInput{pointer-events:none; width:100%; box-sizing:border-box; background:rgba(8,11,16,.82); border:1px solid #2e3d4d; color:#dce8f2; border-radius:8px; padding:6px 12px; font-size:13px; font-weight:600; font-family:inherit; text-align:center; opacity:.4; transition:opacity .15s}
+  #chatInput:focus{opacity:1; pointer-events:auto; border-color:var(--accent); outline:none; text-align:left}
   #elim{position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px}
   #elim .big{font-size:44px; font-weight:900; color:#ff5470; text-shadow:0 2px 12px #000}
   #elim .small{font-size:15px; color:#cdd}
@@ -74,7 +74,7 @@
   .toast{background:rgba(8,11,16,.85); border:1px solid #2e3d4d; border-radius:8px; padding:7px 16px; font-size:14px}
 
   .panel{position:absolute; inset:0; z-index:25; display:flex; align-items:center; justify-content:center; background:rgba(6,9,13,.85); backdrop-filter:blur(3px); padding:18px; overflow:auto}
-  .box{background:var(--panel); border:1px solid #243140; border-radius:16px; padding:20px; width:min(760px,96vw); max-height:94vh; overflow:auto}
+  .box{background:var(--panel); border:1px solid #243140; border-radius:16px; padding:20px; width:min(1040px,97vw); max-height:94vh; display:flex; flex-direction:column; overflow:hidden}
   .box h2{font-size:22px} .box .muted{color:var(--muted); font-size:13px}
   .hdrow{display:flex; justify-content:space-between; align-items:flex-start; gap:10px; flex-wrap:wrap}
   .standings{display:flex; justify-content:center; gap:18px; align-items:center; margin:8px 0; font-size:26px; font-weight:900}
@@ -83,7 +83,7 @@
   .tabs{display:flex; gap:6px; flex-wrap:wrap; margin:10px 0; border-bottom:1px solid #243140; padding-bottom:10px}
   .tabs button{border:1px solid #2e3d4d; background:#141b24; color:#cfe0ee; border-radius:8px; padding:7px 13px; cursor:pointer; font-family:inherit; font-weight:700; font-size:13px}
   .tabs button.sel{background:#243140; border-color:var(--accent); color:var(--accent)}
-  .grid{display:grid; grid-template-columns:1fr 1fr; gap:10px}
+  .grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:10px; overflow-y:auto; min-height:0; flex:1; align-content:start; padding-right:4px}
   .item{background:#0f1620; border:1px solid #243140; border-radius:12px; padding:12px; display:flex; flex-direction:column}
   .item.eq{border-color:var(--accent); box-shadow:0 0 0 1px var(--accent) inset}
   .item.lock{opacity:.55}
@@ -161,7 +161,7 @@
       </div>
       <div class="tabs" id="tabs"></div>
       <div class="grid" id="grid"></div>
-      <div class="row" style="margin-top:16px"><button class="btn ghost" id="shopClose">Close</button></div>
+      <div class="row" style="margin-top:16px"><button class="btn ghost" id="resetBtn" style="margin-right:8px">↺ Reset Loadout (refund)</button><button class="btn ghost" id="shopClose">Close</button></div>
     </div>
   </div>
 </div>
@@ -170,7 +170,7 @@
 "use strict";
 const $=id=>document.getElementById(id);
 const clamp=(v,a,b)=>v<a?a:v>b?b:v;
-const ZOOM=1.3;                       // camera zoom — you see a slice of the map, not all of it
+const ZOOM=0.95;                      // camera zoom (lower = see more map)
 const sprites={};                     // class -> Image (auto-loaded from public/sprites/<Class>.png)
 const botSprites=[];                  // generic bot looks
 function loadSprites(){
@@ -195,9 +195,9 @@ addEventListener('resize',resize); resize();
 let ws=null, myId=null, arena={w:2000,h:1500}, obstacles=[], terrain=null, catalog=null, classesInfo=null, unlockLevel=10;
 let snap=null, view=new Map(), splats=[], feed=[], toasts=[], cam={x:0,y:0}, connected=false;
 let ter=null, terMini=null; const keys={}, mouse={x:0,y:0,down:false}; let reloadFlag=false, deployFlag=false, goldenFlag=false;
-let shopOpenedBy=null, activeTab='class', myLoadout=null, loadCfg=null;
+let shopOpenedBy=null, activeTab='class', myLoadout=null, loadCfg=null, classUnlock=null;
 let lobby=null, lobbyCanvas=null, freeCam={x:0,y:0}, storeCats=null;
-let actx=null, muted=false, prevAmmo=null, bannerT=null; let peek=false; let myPos=null; let chat=[]; const CLIENT_BUILD='hvpb-2026.06.14.1';
+let actx=null, muted=false, prevAmmo=null, bannerT=null; let peek=false; let myPos=null; let chat=[]; const CLIENT_BUILD='hvpb-2026.06.14.6';
 function aud(){ if(!actx){ try{ actx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } return actx; }
 function blip(type,freq,dur,vol,ramp){ if(muted) return; const a=aud(); if(!a) return; try{ const o=a.createOscillator(),g=a.createGain(); o.type=type; o.frequency.value=freq; if(ramp) o.frequency.exponentialRampToValueAtTime(Math.max(30,freq+ramp),a.currentTime+dur); g.gain.value=vol; g.gain.exponentialRampToValueAtTime(0.0001,a.currentTime+dur); o.connect(g); g.connect(a.destination); o.start(); o.stop(a.currentTime+dur); }catch(e){} }
 const sfx={
@@ -212,7 +212,8 @@ const sfx={
 function showBanner(text,color){ const b=$('rbanner'); b.textContent=text; b.style.color=color; b.classList.remove('hidden'); clearTimeout(bannerT); bannerT=setTimeout(()=>b.classList.add('hidden'),3000); }
 function addSplashBlob(x,y,r,c){ for(let i=0;i<10;i++){ const a=Math.random()*6.28,d=Math.random()*r*0.8; splats.push({x:x+Math.cos(a)*d,y:y+Math.sin(a)*d,r:r*(0.25+Math.random()*0.25),c,al:.4+Math.random()*0.25}); } if(splats.length>1200) splats.splice(0,splats.length-1200); }
 const TC=['#2f6b32','#1d4a22','#245f7e','#6f6657'];
-const TAB_LABELS={class:'Class',weapon:'Weapon',mods:'Weapon Mods',armor:'Armor Chips',gadget:'Gadget'};
+const TAB_LABELS={class:'Class',weapon:'Weapon',mods:'Weapon Mods',armor:'Armor Chips',gadget:'Gadget',modes:'Modes'};
+const MODE_NAMES={tdm:'Team Deathmatch',ctf:'Capture the Flag',invaders:'Bot Invaders'};
 const CLS_COLORS={Trooper:'#cbd5e1',VetTrooper:'#7dd3fc',HeavyWeapons:'#ff8c42',Scout:'#9b5de5',Infiltrator:'#06d6a0',Sniper:'#ef476f',Engineer:'#ffd166',Officer:'#3da9fc'};
 
 addEventListener('keydown',e=>{ if(e.target && (e.target.id==='chatInput'||e.target.id==='nameIn'||e.target.id==='passIn')) return; const k=e.key.toLowerCase(); keys[k]=true;
@@ -227,7 +228,7 @@ addEventListener('keydown',e=>{ if(e.target && (e.target.id==='chatInput'||e.tar
   if([' ','arrowup','arrowdown','arrowleft','arrowright','tab'].includes(k)) e.preventDefault(); });
 addEventListener('keyup',e=>{ keys[e.key.toLowerCase()]=false; });
 cv.addEventListener('mousemove',e=>{ const r=cv.getBoundingClientRect(); mouse.x=(e.clientX-r.left)*(cv.width/r.width); mouse.y=(e.clientY-r.top)*(cv.height/r.height); });
-cv.addEventListener('mousedown',()=>mouse.down=true); addEventListener('mouseup',()=>mouse.down=false);
+cv.addEventListener('mousedown',()=>{ mouse.down=true; if(isTyping()) $('chatInput').blur(); }); addEventListener('mouseup',()=>mouse.down=false);
 
 (function(){ let d; if(location.protocol==='file:') d='ws://localhost:3000'; else d=(location.protocol==='https:'?'wss://':'ws://')+location.host; $('serverIn').value=d; })();
 
@@ -255,7 +256,7 @@ function esc(s){ return (''+s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>'
 function isTyping(){ const a=document.activeElement; return !!(a && a.id==='chatInput'); }
 
 function onMsg(m){
-  if(m.t==='welcome'){ myId=m.id; arena=m.arena; obstacles=m.obstacles||[]; terrain=m.terrain; catalog=m.catalog; classesInfo=m.classes; unlockLevel=m.unlockLevel||10; lobby=m.lobby||null; loadCfg=m.loadoutCfg||null;
+  if(m.t==='welcome'){ myId=m.id; arena=m.arena; obstacles=m.obstacles||[]; terrain=m.terrain; catalog=m.catalog; classesInfo=m.classes; unlockLevel=m.unlockLevel||10; lobby=m.lobby||null; loadCfg=m.loadoutCfg||null; classUnlock=m.classUnlock||classUnlock;
     connected=true; $('menu').classList.add('hidden'); $('hud').classList.remove('hidden'); mm.width=180; mm.height=Math.round(180*arena.h/arena.w); prerenderTerrain(); loadSprites(); loadTiles();
     { const vd=$('ver'); if(vd){ if(m.build&&m.build!==CLIENT_BUILD){ vd.textContent='⚠ client '+CLIENT_BUILD+' ≠ server '+m.build; vd.style.color='#ffb84d'; } else { vd.textContent='build '+CLIENT_BUILD+' ✓ live'; vd.style.color='#5b8c5b'; } } } }
   else if(m.t==='map'){ arena=m.arena; terrain=m.terrain; mm.height=Math.round(180*arena.h/arena.w); prerenderTerrain(); }
@@ -266,9 +267,12 @@ function onMsg(m){
     if(m.events) for(const ev of m.events) handleEvent(ev); }
   else if(m.t==='authfail'){ $('status').textContent='⚠ '+(m.msg||'Login failed'); try{ws.close();}catch(e){} connected=false; }
   else if(m.t==='chat'){ chat.push({from:m.from,team:m.team,text:m.text,t:14}); if(chat.length>10) chat.shift(); }
-  else if(m.t==='buyresult'){ if(m.money!=null) $('shopWallet').textContent=m.money; if(m.owned&&snap&&snap.you) snap.you.owned=m.owned; if(m.msg) toast(m.ok?('✅ '+m.msg):('❌ '+m.msg)); if(!$('shop').classList.contains('hidden')){buildTabs();buildGrid();} }
+  else if(m.t==='buyresult'){ if(m.money!=null) $('shopWallet').textContent=m.money; if(m.owned&&snap&&snap.you) snap.you.owned=m.owned; if(m.inv&&snap&&snap.you) snap.you.inv=m.inv; if(m.msg) toast(m.ok?('✅ '+m.msg):('❌ '+m.msg)); if(!$('shop').classList.contains('hidden')){buildTabs();buildGrid();} }
   else if(m.t==='loadresult'){ if(m.money!=null) $('shopWallet').textContent=m.money; if(!m.ok){ toast('❌ '+(m.msg||'invalid loadout')); syncLoadout(); } if(!$('shop').classList.contains('hidden')){buildTabs();buildGrid();updateShopLive();} }
-  else if(m.t==='classresult'){ if(!m.ok && m.msg) toast('❌ '+m.msg); syncLoadout(); if(!$('shop').classList.contains('hidden')){buildTabs();buildGrid();} }
+  else if(m.t==='classresult'){ if(m.money!=null) $('shopWallet').textContent=m.money; if(!m.ok && m.msg) toast('❌ '+m.msg); else { if(snap&&snap.you){ snap.you.inv=m.inv||{}; snap.you.owned=m.owned||[]; } if(m.refund) toast('Class switched (+'+m.refund+' refunded)'); myLoadout=null; } if(!$('shop').classList.contains('hidden')){buildTabs();buildGrid();} }
+  else if(m.t==='resetresult'){ if(m.money!=null) $('shopWallet').textContent=m.money; if(m.ok){ if(snap&&snap.you){ snap.you.inv=m.inv||{}; snap.you.owned=m.owned||[]; } myLoadout={weapon:(classesInfo[snap.you.cls]||{}).defWeapon, wmods:[], chips:[], gadget:'none'}; toast('↺ Loadout reset (+'+(m.refund||0)+' refunded)'); } else if(m.msg) toast('❌ '+m.msg); if(!$('shop').classList.contains('hidden')){buildTabs();buildGrid();updateShopLive();} }
+  else if(m.t==='voteresult'){ if(!$('shop').classList.contains('hidden') && activeTab==='modes') buildGrid(); }
+  else if(m.t==='upgraderesult'){ if(m.money!=null) $('shopWallet').textContent=m.money; if(m.tiers&&snap&&snap.you) snap.you.tiers=m.tiers; if(m.msg) toast(m.ok?('✅ '+m.msg):('❌ '+m.msg)); if(!$('shop').classList.contains('hidden')){buildGrid();} }
 }
 function handleEvent(ev){
   if(ev.type==='splat') addSplat(ev.x,ev.y,ev.c);
@@ -554,6 +558,7 @@ function openStore(zoneId){ storeCats = zoneId==='armory' ? ['weapon','mods'] : 
 function closeShop(){ shopOpenedBy=null; $('shop').classList.add('hidden'); }
 function toggleShop(by){ if($('shop').classList.contains('hidden')) openShop(by); else closeShop(); }
 $('btnShop').onclick=()=>toggleShop('manual'); $('shopClose').onclick=closeShop;
+$('resetBtn').onclick=()=>{ if(snap&&snap.you) send({t:'resetloadout'}); };
 function setPeekBtn(){ const b=$('btnPeek'); if(b) b.classList.toggle('on',peek); }
 $('btnPeek').onclick=()=>{ peek=!peek; setPeekBtn(); toast(peek?'🔍 Pan mode ON — move mouse to look around':'Pan mode off'); };
 $('btnReady').onclick=()=>{ if(snap&&snap.you) send({t:'ready', on:!(snap.you.ready!==false)}); };
@@ -564,60 +569,101 @@ function ldWeight(ld){ let w=(loadCfg?loadCfg.weaponWt:4); for(const m of ld.wmo
 function syncLoadout(){ const y=snap&&snap.you; if(!y||!y.equip) return; myLoadout={weapon:y.equip.weapon, wmods:(y.equip.wmods||[]).slice(), chips:(y.equip.chips||[]).slice(), gadget:y.equip.gadget||'none'}; }
 function sendLoadout(){ if(myLoadout) send({t:'loadout', weapon:myLoadout.weapon, wmods:myLoadout.wmods, chips:myLoadout.chips, gadget:myLoadout.gadget}); }
 function ownsIt(cat,id){ const y=snap.you; const it=catalog[cat]&&catalog[cat][id]; if(it&&it.cost===0) return true; if(cat==='weapon'&&(classesInfo[y.cls]||{}).defWeapon===id) return true; return (y.owned||[]).includes(cat+':'+id); }
-function buildTabs(){ const t=$('tabs'); t.innerHTML=''; const cats=storeCats||['class','weapon','mods','armor','gadget'];
+function buildTabs(){ const t=$('tabs'); t.innerHTML=''; const cats=storeCats||['class','weapon','mods','armor','gadget','modes'];
   for(const cat of cats){ const b=document.createElement('button'); b.className=(cat===activeTab?'sel':''); b.textContent=TAB_LABELS[cat]||cat; b.onclick=()=>{ activeTab=cat; buildTabs(); buildGrid(); }; t.appendChild(b); }
   const ab=document.querySelector('.antebox'); if(ab) ab.style.display=(!storeCats||storeCats.includes('class'))?'flex':'none'; }
 function buildGrid(){
   if(!snap||!snap.you||!catalog) return; const y=snap.you; if(!myLoadout) syncLoadout(); const grid=$('grid'); grid.innerHTML='';
   const cap=y.weightCap||12, curW=myLoadout?ldWeight(myLoadout):0;
+  if(snap.phase==='active' && activeTab!=='modes'){ const w=document.createElement('div'); w.className='item lock'; w.innerHTML='<div class="in"><span>\uD83D\uDD12 Loadout locked</span></div><div class="id">Gear changes only between rounds, in the holding area. (Mode voting still works.)</div>'; grid.appendChild(w); return; }
   if(activeTab==='class'){
-    for(const k in classesInfo){ const ci=classesInfo[k]; const locked=(k!=='Trooper'&&!y.classUnlocked); const cur=y.cls===k;
+    for(const k in classesInfo){ const ci=classesInfo[k]; const req=(classUnlock&&classUnlock[k])||(k==='Trooper'?1:10); const locked=(y.level||1)<req; const cur=y.cls===k;
       const el=document.createElement('div'); el.className='item'+(cur?' eq':'')+(locked?' lock':'');
-      el.innerHTML=`<div class="in"><span><span style="color:${CLS_COLORS[k]||'#fff'}">●</span> ${k}</span>${locked?`<span class="cost">Lv ${unlockLevel}</span>`:''}</div><div class="id">${ci.desc||''}</div>`;
-      const b=document.createElement('button'); if(cur){ b.textContent='Selected'; b.className='equip'; b.disabled=true; } else if(locked){ b.textContent='Locked (Lv '+unlockLevel+')'; b.disabled=true; } else { b.textContent='Select'; b.className='equip'; b.onclick=()=>send({t:'class',cls:k}); }
+      el.innerHTML=`<div class="in"><span><span style="color:${CLS_COLORS[k]||'#fff'}">●</span> ${k}</span>${locked?`<span class="cost">Lv ${req}</span>`:''}</div><div class="id">${ci.desc||''}</div>`;
+      const b=document.createElement('button'); if(cur){ b.textContent='Selected'; b.className='equip'; b.disabled=true; } else if(locked){ b.textContent='Unlocks at Lv '+req; b.disabled=true; } else { b.textContent='Select (refunds gear)'; b.className='equip'; b.onclick=()=>send({t:'class',cls:k}); }
       el.appendChild(b); grid.appendChild(el); }
     return;
   }
-  if(activeTab==='weapon' || activeTab==='gadget'){
-    const cat=activeTab, items=catalog[cat], ci=classesInfo[y.cls]||{weapons:[],gear:[]};
-    for(const id in items){ const it=items[id];
-      const allowed = cat==='weapon' ? ci.weapons.includes(id) : (id==='none'||ci.gear.includes(id));
-      const owned=ownsIt(cat,id); const sel=myLoadout[cat]===id; const afford=y.money>=it.cost;
+  if(activeTab==='modes'){
+    const mv=(snap.you&&snap.you.modeVotes)||{}; const ms=snap.modes||{counts:{},disabled:[],players:1,list:['tdm','ctf','invaders']};
+    const head=document.createElement('div'); head.className='item'; head.innerHTML=`<div class="in"><span>Mode rotation — vote off what you don't want</span></div><div class="id">A majority voting a mode off removes it from the random rotation. (Capture the Flag also needs 2+ players.)</div>`; grid.appendChild(head);
+    for(const m of (ms.list||['tdm','ctf','invaders'])){ const off=!!mv[m]; const cnt=(ms.counts&&ms.counts[m])||0; const dis=(ms.disabled||[]).includes(m);
+      const el=document.createElement('div'); el.className='item'+(dis?' lock':(off?'':' eq'));
+      el.innerHTML=`<div class="in"><span>${MODE_NAMES[m]||m}${dis?' <span style="color:#ff8aa0">· OFF rotation</span>':''}</span><span class="cost">${cnt}/${ms.players} voted off</span></div><div class="id">${off?'You voted to skip this mode.':'In your rotation.'}</div>`;
+      const b=document.createElement('button'); if(off){ b.textContent='Vote back IN'; } else { b.textContent='Vote OFF'; b.className='equip'; } b.onclick=()=>send({t:'modevote',mode:m,on:!off});
+      el.appendChild(b); grid.appendChild(el);
+    }
+    return;
+  }
+  if(activeTab==='weapon'){
+    const ci=classesInfo[y.cls]||{weapons:[]}; const tiers=y.tiers||{}; const TC={2:600,3:1200,4:2000,5:3000};
+    for(const id in catalog.weapon){ const it=catalog.weapon[id]; const allowed=ci.weapons.includes(id); const owned=ownsIt('weapon',id); const sel=myLoadout.weapon===id; const afford=y.money>=it.cost; const tier=owned?(tiers[id]||1):0;
+      const el=document.createElement('div'); el.className='item'+(sel?' eq':'')+(!allowed?' lock':'');
+      el.innerHTML=`<div class="in"><span>${it.name}${owned?` <span style="color:#9be36a">T${tier}/5</span>`:''}</span>${it.cost>0?`<span class="cost">💰 ${it.cost}</span>`:'<span class="cost">free</span>'}</div><div class="id">${it.desc||''}</div>`;
+      const row=document.createElement('div'); row.style.cssText='display:flex;gap:6px;margin-top:6px;flex-wrap:wrap';
+      if(!allowed){ const b=document.createElement('button'); b.textContent='N/A for '+y.cls; b.disabled=true; row.appendChild(b); }
+      else {
+        const b=document.createElement('button');
+        if(sel){ b.textContent='Selected ✓'; b.className='equip'; b.disabled=true; }
+        else if(owned){ b.textContent='Select'; b.className='equip'; b.onclick=()=>{ myLoadout.weapon=id; sendLoadout(); buildGrid(); }; }
+        else if(afford){ b.textContent='Buy'; b.onclick=()=>send({t:'buy',item:'weapon:'+id}); }
+        else { b.textContent='Need 💰'+it.cost; b.disabled=true; }
+        row.appendChild(b);
+        if(owned && tier<5){ const cost=TC[tier+1], lvlReq=tier*3; const up=document.createElement('button');
+          if(y.level<lvlReq){ up.textContent=`Upgrade (Lv ${lvlReq})`; up.disabled=true; }
+          else if(y.money<cost){ up.textContent=`Upgrade 💰${cost}`; up.disabled=true; }
+          else { up.textContent=`Upgrade → T${tier+1} (💰${cost})`; up.onclick=()=>send({t:'upgrade',item:id}); }
+          row.appendChild(up);
+        }
+      }
+      el.appendChild(row); grid.appendChild(el);
+    }
+    return;
+  }
+  if(activeTab==='gadget'){
+    const ci=classesInfo[y.cls]||{gear:[]};
+    for(const id in catalog.gadget){ const it=catalog.gadget[id]; const allowed=(id==='none'||ci.gear.includes(id)); const owned=ownsIt('gadget',id); const sel=myLoadout.gadget===id; const afford=y.money>=it.cost;
       const el=document.createElement('div'); el.className='item'+(sel?' eq':'')+(!allowed?' lock':'');
       el.innerHTML=`<div class="in"><span>${it.name}</span>${it.cost>0?`<span class="cost">💰 ${it.cost}</span>`:'<span class="cost">free</span>'}</div><div class="id">${it.desc||''}</div>`;
       const b=document.createElement('button');
       if(!allowed){ b.textContent='N/A for '+y.cls; b.disabled=true; }
       else if(sel){ b.textContent='Selected ✓'; b.className='equip'; b.disabled=true; }
-      else if(owned){ b.textContent='Select'; b.className='equip'; b.onclick=()=>{ myLoadout[cat]=id; sendLoadout(); buildGrid(); }; }
-      else if(afford){ b.textContent='Buy'; b.onclick=()=>send({t:'buy',item:cat+':'+id}); }
+      else if(owned){ b.textContent='Select'; b.className='equip'; b.onclick=()=>{ myLoadout.gadget=id; sendLoadout(); buildGrid(); }; }
+      else if(afford){ b.textContent='Buy'; b.onclick=()=>send({t:'buy',item:'gadget:'+id}); }
       else { b.textContent='Need 💰'+it.cost; b.disabled=true; }
       el.appendChild(b); grid.appendChild(el);
     }
     return;
   }
-  // mods / armor chips — socketed, weight-limited
+  // mods / armor chips — buy a copy per socket (cost per mod), then equip
   const isMod=activeTab==='mods', cat=isMod?'wmod':'chip', items=catalog[cat];
   const slots=isMod?(loadCfg?loadCfg.wmodSlots:2):(loadCfg?loadCfg.chipSlots:5);
-  const list=isMod?myLoadout.wmods:myLoadout.chips;
+  const list=isMod?myLoadout.wmods:myLoadout.chips; const inv=y.inv||{}; const maxCamo=(loadCfg?loadCfg.maxCamo:2);
   const head=document.createElement('div'); head.className='item';
-  head.innerHTML=`<div class="in"><span>${isMod?'Weapon Mods':'Armor Chips'} — ${list.length}/${slots} slots</span><span class="cost" style="color:${curW>cap?'#ff6b6b':'#9be36a'}">⚖ ${curW}/${cap}</span></div><div class="id">${list.map(x=>items[x]?items[x].name:x).join(' + ')||'(empty — add below)'}</div>`;
+  head.innerHTML=`<div class="in"><span>${isMod?'Weapon Mods':'Armor Chips'} — ${list.length}/${slots} equipped</span><span class="cost" style="color:${curW>cap?'#ff6b6b':'#9be36a'}">⚖ ${curW}/${cap}</span></div><div class="id">Cost is per copy — buy one for each socket. ${list.map(x=>items[x]?items[x].name:x).join(' + ')||''}</div>`;
   grid.appendChild(head);
-  for(const id in items){ const it=items[id]; const owned=ownsIt(cat,id); const count=list.filter(x=>x===id).length; const afford=y.money>=it.cost;
+  for(const id in items){ const it=items[id]; const ownedN=inv[cat+':'+id]||0; const eqN=list.filter(x=>x===id).length; const afford=y.money>=it.cost;
     const heavyBlock = it.heavy && loadCfg && loadCfg.heavyClasses && !loadCfg.heavyClasses.includes(y.cls);
-    const el=document.createElement('div'); el.className='item'+(count>0?' eq':'')+(heavyBlock?' lock':'');
-    el.innerHTML=`<div class="in"><span>${it.name}${count>0?` <span style="color:#9be36a">×${count}</span>`:''}</span>${it.cost>0?`<span class="cost">💰 ${it.cost}</span>`:''}</div><div class="id">${it.desc||''} · wt ${it.wt}</div>`;
+    const el=document.createElement('div'); el.className='item'+(eqN>0?' eq':'')+(heavyBlock?' lock':'');
+    el.innerHTML=`<div class="in"><span>${it.name}${ownedN>0?` <span style="color:#8aa0b3">owned ${ownedN}</span>`:''}${eqN>0?` <span style="color:#9be36a">·eq ${eqN}</span>`:''}</span>${it.cost>0?`<span class="cost">💰 ${it.cost}</span>`:''}</div><div class="id">${it.desc||''} · wt ${it.wt}</div>`;
     const row=document.createElement('div'); row.style.cssText='display:flex;gap:6px;margin-top:6px;flex-wrap:wrap';
     if(heavyBlock){ const b=document.createElement('button'); b.textContent='Vet / Heavy / Officer only'; b.disabled=true; row.appendChild(b); }
-    else if(!owned){ const b=document.createElement('button'); if(afford){ b.textContent='Buy 💰'+it.cost; b.onclick=()=>send({t:'buy',item:cat+':'+id}); } else { b.textContent='Need 💰'+it.cost; b.disabled=true; } row.appendChild(b); }
     else {
-      const add=document.createElement('button'); add.className='equip';
-      const camoOK = !it.camo || (list.filter(x=>items[x]&&items[x].camo).length < (loadCfg?loadCfg.maxCamo:2));
-      if(list.length>=slots){ add.textContent='Slots full'; add.disabled=true; }
-      else if(!camoOK){ add.textContent='Max camo'; add.disabled=true; }
-      else if(curW+(it.wt||0)>cap){ add.textContent='Too heavy'; add.disabled=true; }
-      else { add.textContent='+ Add'; add.onclick=()=>{ list.push(id); sendLoadout(); buildGrid(); }; }
-      row.appendChild(add);
-      if(count>0){ const rm=document.createElement('button'); rm.textContent='− Remove'; rm.onclick=()=>{ const i=list.lastIndexOf(id); if(i>=0) list.splice(i,1); sendLoadout(); buildGrid(); }; row.appendChild(rm); }
+      const buy=document.createElement('button'); const camoCapHit = it.camo && ownedN>=maxCamo;
+      if(ownedN>=slots || camoCapHit){ buy.textContent='Owned max'; buy.disabled=true; }
+      else if(afford){ buy.textContent='Buy 💰'+it.cost; buy.onclick=()=>send({t:'buy',item:cat+':'+id}); }
+      else { buy.textContent='Need 💰'+it.cost; buy.disabled=true; }
+      row.appendChild(buy);
+      if(ownedN>0){ const add=document.createElement('button'); add.className='equip';
+        const camoEqOK=!it.camo || (list.filter(x=>items[x]&&items[x].camo).length<maxCamo);
+        if(eqN>=ownedN){ add.textContent='Equip (buy more)'; add.disabled=true; }
+        else if(list.length>=slots){ add.textContent='Slots full'; add.disabled=true; }
+        else if(!camoEqOK){ add.textContent='Max camo'; add.disabled=true; }
+        else if(curW+(it.wt||0)>cap){ add.textContent='Too heavy'; add.disabled=true; }
+        else { add.textContent='+ Equip'; add.onclick=()=>{ list.push(id); sendLoadout(); buildGrid(); }; }
+        row.appendChild(add);
+        if(eqN>0){ const rm=document.createElement('button'); rm.textContent='− Unequip'; rm.onclick=()=>{ const i=list.lastIndexOf(id); if(i>=0) list.splice(i,1); sendLoadout(); buildGrid(); }; row.appendChild(rm); }
+      }
     }
     el.appendChild(row); grid.appendChild(el);
   }

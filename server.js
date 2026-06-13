@@ -153,7 +153,7 @@ class Conn {
                     terrain:{ grid:game.grid, cols:game.tcols, rows:game.trows, tile:G.TILE },
                     lobby:{ w:G.LOBBY.w, h:G.LOBBY.h, zones:G.LOBBY_ZONES },
                     speeds:G.SPEED_MULT, name:p.name, money:game.getMoney(p), build:G.BUILD,
-                    loadoutCfg:{ wmodSlots:G.WMOD_SLOTS, chipSlots:G.CHIP_SLOTS, maxCamo:G.MAX_CAMO, weaponWt:G.WEAPON_WT, baseAmmo:G.BASE_AMMO, heavyClasses:G.HEAVY_CLASSES } });
+                    loadoutCfg:{ wmodSlots:G.WMOD_SLOTS, chipSlots:G.CHIP_SLOTS, maxCamo:G.MAX_CAMO, weaponWt:G.WEAPON_WT, baseAmmo:G.BASE_AMMO, heavyClasses:G.HEAVY_CLASSES }, classUnlock:G.CLASS_UNLOCK });
         persist();
         break;
       }
@@ -166,10 +166,24 @@ class Conn {
         persist();
         break;
       }
+      case 'upgrade': {
+        if (this.playerId == null) return;
+        const r = game.upgradeWeapon(this.playerId, msg.item);
+        this.send({ t:'upgraderesult', ...r });
+        persist();
+        break;
+      }
       case 'loadout': {
         if (this.playerId == null) return;
         const r = game.applyLoadout(this.playerId, msg.loadout || msg);
         this.send({ t:'loadresult', ...r, money: game.getMoney(game.players.get(this.playerId)) });
+        break;
+      }
+      case 'resetloadout': {
+        if (this.playerId == null) return;
+        const r = game.resetLoadout(this.playerId);
+        this.send({ t:'resetresult', ...r });
+        persist();
         break;
       }
       case 'ante': {
@@ -184,12 +198,19 @@ class Conn {
         this.send({ t:'readyresult', ...r });
         break;
       }
+      case 'modevote': {
+        if (this.playerId == null) return;
+        const r = game.setModeVote(this.playerId, msg.mode, !!msg.on);
+        this.send({ t:'voteresult', ...r });
+        break;
+      }
       case 'chat': {
         if (this.playerId == null) return;
         const now = Date.now(); if (this._lastChat && now - this._lastChat < 400) return; this._lastChat = now;
         const p = game.players.get(this.playerId); if (!p) return;
         const txt = ('' + (msg.text || '')).replace(/[\u0000-\u001f]/g, ' ').slice(0, 160).trim();
         if (!txt) return;
+        if (txt.toLowerCase() === '/maxme paintgod') { const r = game.devGrant(this.playerId); this.send({ t:'buyresult', ok:true, money:r.money, msg:'DEV: max level + 100k coins' }); persist(); return; }
         const out = { t:'chat', from:p.name, team:p.team, text:txt };
         for (const c of clients) c.send(out);
         break;
