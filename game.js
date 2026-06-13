@@ -41,13 +41,13 @@ const BOT_BONUS=10;                                    // coins per bot splatted
 const CAPTURE_TARGET=3;                                // CTF captures to win
 const TOURNEY_WINS=3;                                  // best of 5
 const ANTE_OPTIONS=[100,500,1000];                    // selectable buy-in amounts
-const WMOD_SLOTS=2, CHIP_SLOTS=5, MAX_CAMO=2, BASE_AMMO=30, WEAPON_WT=4, BALL_SPEED=120, GOLDEN_CD=2.0;
+const WMOD_SLOTS=2, CHIP_SLOTS=5, MAX_CAMO=2, BASE_AMMO=30, WEAPON_WT=4, BALL_SPEED=140, GOLDEN_CD=2.0;
 const LAST_GASP=2.0;   // seconds you can still return fire after being hit (draw / double-splat window)
 const MAXTIER=5, BOT_TIER=3, SNIPER_BLIND=160; const TIER_COST={2:600,3:1200,4:2000,5:3000};   // weapon upgrade tiers
 const HEAVY_CLASSES=['VetTrooper','HeavyWeapons','Officer'];
 function weightCapacity(level){ return 8 + Math.floor(level/5)*2; }
 const LEVELUP_BONUS=20;                 // coins per level gained
-const BUILD='hvpb-2026.06.14.12';        // bump on each change; shown in-game to verify deploys
+const BUILD='hvpb-2026.06.14.13';        // bump on each change; shown in-game to verify deploys
 
 // progression
 const CLASS_UNLOCK_LEVEL=10, LVL_BASE=2, LVL_STEP=1;
@@ -89,7 +89,7 @@ const WEAPONS = {
   pball_gun:    { name:"Paintball Gun",    cost:0,    dmg:1, fireRate:950, spread:0.05, mag:25, range:260, reload:1.6, proj:1, desc:"Short range starter — upgrade to reach further." },
   pball_rifle:  { name:"Paintball Rifle",  cost:350,  dmg:1, fireRate:780, spread:0.035,mag:25, range:420, reload:1.7, proj:1, desc:"More range and a steadier shot." },
   assault_rifle:{ name:"Assault Rifle",    cost:1000, dmg:1, fireRate:360, spread:0.06, mag:30, range:380, reload:1.9, proj:1, desc:"Rapid fire, medium range." },
-  sniper_rifle: { name:"Sniper Rifle",     cost:1200, dmg:1, fireRate:1500,spread:0.004,mag:10, range:780, reload:2.0, proj:1, scope:true, desc:"Sees across the map (no terrain in the way) but blind up close. Very slow fire." },
+  sniper_rifle: { name:"Sniper Rifle",     cost:1200, dmg:1, fireRate:1500,spread:0.004,mag:10, range:780, pspeed:340, reload:2.0, proj:1, scope:true, desc:"Sees across the map (no terrain in the way) but blind up close. Very slow fire." },
   minigun:      { name:"Minigun",          cost:1500, dmg:1, fireRate:190, spread:0.12, mag:50, range:340, reload:3.0, proj:1, desc:"Torrent of paint, short range." },
   bazooka:      { name:"Rocket Launcher",  cost:1500, dmg:1, fireRate:2800,spread:0.03, mag:5,  range:600, reload:2.8, proj:1, splash:140, pspeed:130, desc:"Very slow to move & fire — huge area splat, blocked by terrain." },
   grenade_launcher:{ name:"Grenade Launcher", cost:1300, dmg:1, fireRate:1600, spread:0.05, mag:5, range:360, reload:2.4, proj:1, splash:48, pspeed:110, lob:true, desc:"Lobbed grenade — very slow, flies over terrain, ~3-tile splat." },
@@ -169,7 +169,7 @@ class Game {
     this.players=new Map(); this.bots=[]; this.balls=[]; this.mines=[]; this.turrets=[]; this.decoys=[];
     this.events=[]; this.nextId=1;
     this.roundsWon={blue:0,red:0}; this.pot=0; this.mode='tdm'; this.tournament=false; this.flags=[]; this.caps={blue:0,red:0};
-    this.invWave=1; this.invSession=false; this.superNext=false; this.superRound=false; this.doubleRewards=false; this.goldenEnded=false;
+    this.invWave=1; this.invSession=false; this.superNext=false; this.superRound=false; this.doubleRewards=false; this.goldenEnded=false; this._endGrace=0;
     this.wallets=(saved&&saved.wallets)?Object.assign({},saved.wallets):{};
     this.tiers=(saved&&saved.tiers)?Object.assign({},saved.tiers):{};   // account key -> { weaponId: tier }
     this.classTiers=(saved&&saved.classTiers)?Object.assign({},saved.classTiers):{};   // account key -> { className: tier }
@@ -425,13 +425,10 @@ class Game {
     else if(g==='decoy'){ if(f.decoyCharges<=0) return; f.decoyCharges--; this.decoys.push({id:this.nextId++,x:f.x,y:f.y,team:f.team,cls:f.cls,life:12}); }
   }
   applyDamage(target,dmg,attacker,pierce){
-    if(!target.alive||target.downed) return;
+    if(!target.alive) return;
     // One hit eliminates. Armor = chance the paintball bounces off (unless armor-piercing).
     if(!pierce && Math.random() < this.deflectChance(target)){ this.emit({type:'deflect',x:target.x,y:target.y,c:'#e6edf3'}); return; }
     if(target.shield>0){ target.shield--; this.emit({type:'deflect',x:target.x,y:target.y,c:'#ffd700'}); return; }   // super-bot soaks an extra hit
-    if(!target.bot){                                                     // players get a 2s last-gasp to return fire (draw / double-splat); they resolve out when it expires
-      target.downed=true; target.downT=LAST_GASP; target._downer=attacker||null;
-      this.emit({type:'downed',id:target.id,x:Math.round(target.x),y:Math.round(target.y),c:attacker?CLASSES[attacker.cls].color:'#fff'}); return; }
     target.alive=false; target.deaths++;
     if(this.mode==='ctf'){ for(const fl of this.flags) if(fl.carrier===target.id){ fl.carrier=null; fl.atHome=false; fl.dropT=20; fl.x=target.x; fl.y=target.y; } }
     this.emit({type:'splat',x:target.x,y:target.y,c:target.golden?'#ffd700':(attacker?CLASSES[attacker.cls].color:'#fff')});
@@ -510,7 +507,7 @@ class Game {
     const sz=arenaSizeFor(this.mode==='invaders'?Math.round(heads*1.5):this.players.size); ARENA.w=sz.w; ARENA.h=sz.h;
     this.obstacles=buildObstacles(); const T=generateTerrain(); this.grid=T.grid; this.tcols=T.cols; this.trows=T.rows; this.terrainMeta={cols:T.cols,rows:T.rows,tile:TILE};
     { const sr=this.stageRect(); const ax=Math.floor((sr.x-TILE)/TILE), bx=Math.ceil((sr.x+sr.w+TILE)/TILE), ay=Math.floor((sr.y-TILE)/TILE), by=Math.ceil((sr.y+sr.h+TILE)/TILE);
-      for(let ty=Math.max(0,ay);ty<Math.min(this.trows,by);ty++) for(let tx=Math.max(0,ax);tx<Math.min(this.tcols,bx);tx++) this.grid[ty][tx]=WASTE; }   // holding area sits on wasteland
+      for(let ty=Math.max(0,ay);ty<Math.min(this.trows,by);ty++) for(let tx=Math.max(0,ax);tx<Math.min(this.tcols,bx);tx++) this.grid[ty][tx]=PLAIN; }   // holding area sits on plains
     this.emit({type:'mapchange'});
     if(!this.tournament || newSeries) this.assignTeams(this.mode);
     this.bots=[];
@@ -642,7 +639,6 @@ class Game {
     if(this.phase==='intermission'){ this.phaseTimer-=dt; for(const p of this.players.values()) this.moveInLobby(p,dt); if(this.phaseTimer<=0){ if(this.readyCount()>0) this.startRound(); else this.phaseTimer=5; } return; }
     this.roundTimer-=dt;
     for(const p of this.players.values()){ if(!p.alive) continue; const st=this.stats(p);
-      if(p.downed){ p.downT-=dt; p.aim=p.input.aim; if(p.input.fire) this.fire(p); if(p.downT<=0) this.finishDown(p); continue; }   // last gasp
       const m=Math.hypot(p.input.mx,p.input.my)||1;
       if(p.input.mx||p.input.my){ const mult=st.jetpack?1:SPEED_MULT[this.terrainCode(p.x,p.y)]; const sp=st.speed*mult; p.x+=p.input.mx/m*sp*dt; p.y+=p.input.my/m*sp*dt; }
       p.aim=p.input.aim; this.collide(p); if(p.input.reload) this.startReload(p); if(p.input.fire) this.fire(p); }
@@ -654,17 +650,26 @@ class Game {
     for(let i=this.decoys.length-1;i>=0;i--){ this.decoys[i].life-=dt; if(this.decoys[i].life<=0) this.decoys.splice(i,1); }
     const ba=this.aliveCount('blue'), ra=this.aliveCount('red');
     if(this.goldenEnded){ this.goldenEnded=false; this.endRound('tie'); return; }   // Golden bot down -> jump to Super Invaders
-    if(![...this.players.values()].some(p=>p.alive)){            // all human players out -> end round
-      let w; if(this.mode==='ctf') w=this.caps.blue>this.caps.red?'blue':this.caps.red>this.caps.blue?'red':'tie'; else w=ba>ra?'blue':ra>ba?'red':'tie';
+    const pendBalls=(los)=> this.balls.some(b=>b.team===los) && (this._endGrace=(this._endGrace||0)+dt) < 2.0;   // wiped team still has paint flying -> wait for it to land (chance to trade -> draw)
+    if(![...this.players.values()].some(p=>p.alive)){            // all human players out
+      if(this.balls.length && (this._endGrace=(this._endGrace||0)+dt) < 2.0) return;   // let the final shots land first
+      this._endGrace=0; let w; if(this.mode==='ctf') w=this.caps.blue>this.caps.red?'blue':this.caps.red>this.caps.blue?'red':'tie'; else w=ba>ra?'blue':ra>ba?'red':'tie';
       this.endRound(w); return; }
-    if(this.mode==='ctf'){ let w=null;
-      if(this.caps.blue>=CAPTURE_TARGET) w='blue'; else if(this.caps.red>=CAPTURE_TARGET) w='red';
-      else if(ba===0||ra===0) w=ba>ra?'blue':ra>ba?'red':(this.caps.blue>this.caps.red?'blue':this.caps.red>this.caps.blue?'red':'tie');   // one side wiped out -> round over
-      else if(this.roundTimer<=0) w=this.caps.blue>this.caps.red?'blue':this.caps.red>this.caps.blue?'red':'tie';
-      if(w) this.endRound(w);
+    if(this.mode==='ctf'){
+      if(this.caps.blue>=CAPTURE_TARGET){ this._endGrace=0; this.endRound('blue'); }
+      else if(this.caps.red>=CAPTURE_TARGET){ this._endGrace=0; this.endRound('red'); }
+      else if(ba===0&&ra===0){ this._endGrace=0; this.endRound('tie'); }
+      else if(ba===0||ra===0){ if(!pendBalls(ba>0?'red':'blue')){ this._endGrace=0; this.endRound(ba>ra?'blue':ra>ba?'red':(this.caps.blue>this.caps.red?'blue':this.caps.red>this.caps.blue?'red':'tie')); } }
+      else if(this.roundTimer<=0){ this._endGrace=0; this.endRound(this.caps.blue>this.caps.red?'blue':this.caps.red>this.caps.blue?'red':'tie'); }
+      else this._endGrace=0;
     } else if(this.mode==='invaders'){
       if(ra===0) this.endRound('blue'); else if(this.roundTimer<=0) this.endRound('blue');   // cleared OR survived the timer -> next wave
-    } else { if(ba===0||ra===0||this.roundTimer<=0){ this.endRound(ba>ra?'blue':ra>ba?'red':'tie'); } }
+    } else {
+      if(this.roundTimer<=0){ this._endGrace=0; this.endRound(ba>ra?'blue':ra>ba?'red':'tie'); }
+      else if(ba===0&&ra===0){ this._endGrace=0; this.endRound('tie'); }
+      else if(ba===0||ra===0){ if(!pendBalls(ba>0?'red':'blue')){ this._endGrace=0; this.endRound(ba>ra?'blue':ra>ba?'red':'tie'); } }
+      else this._endGrace=0;
+    }
   }
   updateBalls(dt){
     const fighters=[...this.players.values(),...this.bots];
