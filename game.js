@@ -47,7 +47,7 @@ const MAXTIER=5, BOT_TIER=3, SNIPER_BLIND=160; const TIER_COST={2:600,3:1200,4:2
 const HEAVY_CLASSES=['VetTrooper','HeavyWeapons','Officer'];
 function weightCapacity(level){ return 8 + Math.floor(level/5)*2; }
 const LEVELUP_BONUS=20;                 // coins per level gained
-const BUILD='hvpb-2026.06.14.14';        // bump on each change; shown in-game to verify deploys
+const BUILD='hvpb-2026.06.14.16';        // bump on each change; shown in-game to verify deploys
 
 // progression
 const CLASS_UNLOCK_LEVEL=10, LVL_BASE=2, LVL_STEP=1;
@@ -371,10 +371,10 @@ class Game {
     this.inv[p.key]={}; this.owned[p.key]=[]; if(refund) this.addMoney(p,refund); return refund; }
   resetLoadout(id){ const p=this.players.get(id); if(!p||p.bot) return {ok:false};
     if(this.phase==='active') return {ok:false,msg:'Locked during the round.'};
-    const refund=this._refundClear(p); p.equip=this.defaultEquip(p.cls);
+    p.equip=this.defaultEquip(p.cls);   // revert equipped gear to the class starter; KEEP everything owned (re-equip anytime), coins untouched
     const st=this.stats(p); p.maxhp=st.hp; p.hp=st.hp; p.ammo=st.ammoPool; p.mineCharges=0; p.decoyCharges=0; p.hasTurret=false;
-    this.emit({type:'msg',text:`${p.name} reset their loadout (+${refund} refunded).`}); this.savePrefs(p);
-    return {ok:true,money:this.getMoney(p),refund,cls:p.cls,equip:p.equip,inv:this.inv[p.key]||{},owned:this.ownedSet(p.key)}; }
+    this.emit({type:'msg',text:`${p.name} reset their loadout to default.`}); this.savePrefs(p);
+    return {ok:true,money:this.getMoney(p),refund:0,cls:p.cls,equip:p.equip,inv:this.inv[p.key]||{},owned:this.ownedSet(p.key)}; }
   setAnte(id,on,amt){ const p=this.players.get(id); if(!p) return {ok:false}; p.wantAnte=!!on; if(amt!==undefined){ const a=+amt; if(ANTE_OPTIONS.includes(a)) p.anteAmt=a; } return {ok:true,wantAnte:p.wantAnte,anteAmt:p.anteAmt}; }
   setReady(id,on){ const p=this.players.get(id); if(!p) return {ok:false}; p.ready=!!on; if(p.ready) p.afkRounds=0; return {ok:true,ready:p.ready}; }
   readyCount(){ let n=0; for(const p of this.players.values()) if(p.ready!==false) n++; return n; }
@@ -617,9 +617,9 @@ class Game {
     let mvx=0,mvy=0; const tgt=ai.target;
     if(tgt){ const dx=tgt.x-f.x,dy=tgt.y-f.y,d=Math.hypot(dx,dy)||1;
       if(d>f.r+10){ mvx+=dx/d; mvy+=dy/d; }                            // close the distance
-      ai.jitter-=dt; if(ai.jitter<=0){ ai.strafe*=-1; ai.jitter=rand(0.4,1.3); ai.strafeAmt=rand(0.3,0.95); }
+      ai.jitter-=dt; if(ai.jitter<=0){ ai.strafe*=-1; ai.jitter=rand(0.3,1.0); ai.strafeAmt=(Math.random()<0.3? rand(1.1,1.6) : rand(0.2,0.6)); }   // mostly mild, occasional big juke
       const sAmt=ai.strafeAmt||0.5; mvx+=-dy/d*ai.strafe*sAmt; mvy+=dx/d*ai.strafe*sAmt;     // varied strafe amplitude
-      ai.wander+=rand(-1,1)*dt*2.5; mvx+=Math.cos(ai.wander)*0.22; mvy+=Math.sin(ai.wander)*0.22;   // wander so it's not a straight magnet
+      ai.wander+=rand(-1,1)*dt*3.0; mvx+=Math.cos(ai.wander)*0.28; mvy+=Math.sin(ai.wander)*0.28;   // light wander so it's not a straight magnet
       f.aim=Math.atan2((seen||tgt).y-f.y,(seen||tgt).x-f.x);
     } else { const cx=ARENA.w/2, cy=ARENA.h/2, dx=cx-f.x, dy=cy-f.y, d=Math.hypot(dx,dy)||1;   // nobody left -> head to center
       if(d>60){ mvx=dx/d; mvy=dy/d; } else { mvx=Math.cos(ai.wander); mvy=Math.sin(ai.wander); ai.wander+=rand(-1,1)*dt; } f.aim=Math.atan2(dy,dx); }

@@ -173,7 +173,7 @@
       </div>
       <div class="tabs" id="tabs"></div>
       <div class="grid" id="grid"></div>
-      <div class="row" style="margin-top:16px"><button class="btn ghost" id="resetBtn" style="margin-right:8px">↺ Reset Loadout (refund)</button><button class="btn ghost" id="shopClose">Close</button></div>
+      <div class="row" style="margin-top:16px"><button class="btn ghost" id="resetBtn" style="margin-right:8px">↺ Reset to Default</button><button class="btn ghost" id="shopClose">Close</button></div>
     </div>
   </div>
 </div>
@@ -212,7 +212,7 @@ let ter=null, terMini=null; const keys={}, mouse={x:0,y:0,down:false}; let reloa
 let shopOpenedBy=null, activeTab='class', myLoadout=null, loadCfg=null, classUnlock=null;
 let lastBuy=null, pendingClass=null;
 let lobby=null, lobbyCanvas=null, freeCam={x:0,y:0}, storeCats=null;
-let actx=null, muted=false, prevAmmo=null, prevClip=null, prevDowned=false, bannerT=null; let peek=false; let myPos=null; let chat=[]; const CLIENT_BUILD='hvpb-2026.06.14.14';
+let actx=null, muted=false, prevAmmo=null, prevClip=null, prevDowned=false, bannerT=null; let peek=false; let myPos=null; let chat=[]; const CLIENT_BUILD='hvpb-2026.06.14.16';
 function aud(){ if(!actx){ try{ actx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } return actx; }
 function blip(type,freq,dur,vol,ramp){ if(muted) return; const a=aud(); if(!a) return; try{ const o=a.createOscillator(),g=a.createGain(); o.type=type; o.frequency.value=freq; if(ramp) o.frequency.exponentialRampToValueAtTime(Math.max(30,freq+ramp),a.currentTime+dur); g.gain.value=vol; g.gain.exponentialRampToValueAtTime(0.0001,a.currentTime+dur); o.connect(g); g.connect(a.destination); o.start(); o.stop(a.currentTime+dur); }catch(e){} }
 const sfx={
@@ -291,7 +291,7 @@ function onMsg(m){
     if(!m.ok){ if(m.msg) toast('❌ '+m.msg); }
     else { if(snap&&snap.you){ if(m.cls) snap.you.cls=m.cls; if(m.equip) snap.you.equip=m.equip; snap.you.inv=m.inv||{}; snap.you.owned=m.owned||[]; } syncLoadout(); toast('✅ Switched to '+(m.cls||'class')+(m.refund?' (+'+m.refund+' refunded)':'')); }
     pendingClass=null; if(!$('shop').classList.contains('hidden')){buildTabs();buildGrid();updateShopLive();} }
-  else if(m.t==='resetresult'){ if(m.money!=null) $('shopWallet').textContent=m.money; if(m.ok){ if(snap&&snap.you){ if(m.equip) snap.you.equip=m.equip; snap.you.inv=m.inv||{}; snap.you.owned=m.owned||[]; } syncLoadout(); toast('↺ Loadout reset'+(m.refund?' (+'+m.refund+' refunded)':'')); } else if(m.msg) toast('❌ '+m.msg); if(!$('shop').classList.contains('hidden')){buildTabs();buildGrid();updateShopLive();} }
+  else if(m.t==='resetresult'){ if(m.money!=null) $('shopWallet').textContent=m.money; if(m.ok){ if(snap&&snap.you){ if(m.equip) snap.you.equip=m.equip; snap.you.inv=m.inv||{}; snap.you.owned=m.owned||[]; } syncLoadout(); toast('↺ Loadout reset to default'); } else if(m.msg) toast('❌ '+m.msg); if(!$('shop').classList.contains('hidden')){buildTabs();buildGrid();updateShopLive();} }
   else if(m.t==='voteresult'){ if(!$('shop').classList.contains('hidden') && activeTab==='modes') buildGrid(); }
   else if(m.t==='upgraderesult'){ if(m.money!=null) $('shopWallet').textContent=m.money; if(m.tiers&&snap&&snap.you) snap.you.tiers=m.tiers; if(m.msg) toast(m.ok?('✅ '+m.msg):('❌ '+m.msg)); if(!$('shop').classList.contains('hidden')){buildGrid();} }
   else if(m.t==='classupresult'){ if(m.money!=null) $('shopWallet').textContent=m.money; if(m.classTiers&&snap&&snap.you) snap.you.classTiers=m.classTiers; if(m.msg) toast(m.ok?('✅ '+m.msg):('❌ '+m.msg)); if(!$('shop').classList.contains('hidden')){buildGrid();} }
