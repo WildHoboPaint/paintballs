@@ -197,7 +197,7 @@ let snap=null, view=new Map(), splats=[], feed=[], toasts=[], cam={x:0,y:0}, con
 let ter=null, terMini=null; const keys={}, mouse={x:0,y:0,down:false}; let reloadFlag=false, deployFlag=false, goldenFlag=false;
 let shopOpenedBy=null, activeTab='class', myLoadout=null, loadCfg=null, classUnlock=null;
 let lobby=null, lobbyCanvas=null, freeCam={x:0,y:0}, storeCats=null;
-let actx=null, muted=false, prevAmmo=null, prevClip=null, bannerT=null; let peek=false; let myPos=null; let chat=[]; const CLIENT_BUILD='hvpb-2026.06.14.7';
+let actx=null, muted=false, prevAmmo=null, prevClip=null, bannerT=null; let peek=false; let myPos=null; let chat=[]; const CLIENT_BUILD='hvpb-2026.06.14.8';
 function aud(){ if(!actx){ try{ actx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } return actx; }
 function blip(type,freq,dur,vol,ramp){ if(muted) return; const a=aud(); if(!a) return; try{ const o=a.createOscillator(),g=a.createGain(); o.type=type; o.frequency.value=freq; if(ramp) o.frequency.exponentialRampToValueAtTime(Math.max(30,freq+ramp),a.currentTime+dur); g.gain.value=vol; g.gain.exponentialRampToValueAtTime(0.0001,a.currentTime+dur); o.connect(g); g.connect(a.destination); o.start(); o.stop(a.currentTime+dur); }catch(e){} }
 const sfx={
@@ -228,7 +228,8 @@ addEventListener('keydown',e=>{ if(e.target && (e.target.id==='chatInput'||e.tar
   if([' ','arrowup','arrowdown','arrowleft','arrowright','tab'].includes(k)) e.preventDefault(); });
 addEventListener('keyup',e=>{ keys[e.key.toLowerCase()]=false; });
 cv.addEventListener('mousemove',e=>{ const r=cv.getBoundingClientRect(); mouse.x=(e.clientX-r.left)*(cv.width/r.width); mouse.y=(e.clientY-r.top)*(cv.height/r.height); });
-cv.addEventListener('mousedown',()=>{ mouse.down=true; if(isTyping()) $('chatInput').blur(); }); addEventListener('mouseup',()=>mouse.down=false);
+cv.addEventListener('mousedown',e=>{ if(e.button!==0) return; mouse.down=true; if(isTyping()) $('chatInput').blur(); }); addEventListener('mouseup',e=>{ if(e.button===0) mouse.down=false; });
+cv.addEventListener('contextmenu',e=>e.preventDefault());   // right-click no longer fires the gun or pops the browser menu
 
 (function(){ let d; if(location.protocol==='file:') d='ws://localhost:3000'; else d=(location.protocol==='https:'?'wss://':'ws://')+location.host; $('serverIn').value=d; })();
 

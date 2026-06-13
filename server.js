@@ -21,24 +21,30 @@ const DATA_DIR = path.join(__dirname, 'data');
 const SAVE_FILE = path.join(DATA_DIR, 'economy.json');
 const PUBLIC_DIR = path.join(__dirname, 'public');
 
-// ---------- load saved economy ----------
+// ---------- load saved economy (corruption-safe: fall back to .bak) ----------
 let saved = null;
-try { if (fs.existsSync(SAVE_FILE)) saved = JSON.parse(fs.readFileSync(SAVE_FILE, 'utf8')); }
-catch (e) { console.warn('Could not read save file:', e.message); }
+function tryLoad(file){ try { if (fs.existsSync(file)) return JSON.parse(fs.readFileSync(file,'utf8')); } catch(e){ console.warn('Unreadable save '+file+':',e.message); } return null; }
+saved = tryLoad(SAVE_FILE);
+if (saved === null) {
+  const bak = tryLoad(SAVE_FILE + '.bak');
+  if (bak) { console.warn('Main save unreadable — recovered accounts from .bak'); saved = bak; }
+  else if (fs.existsSync(SAVE_FILE)) { try { fs.renameSync(SAVE_FILE, SAVE_FILE + '.corrupt-' + Date.now()); console.warn('Corrupt save set aside; starting fresh'); } catch(e){} }
+}
 const game = new Game(saved);
 
-// ---------- debounced persistence ----------
+// ---------- atomic, crash-safe, debounced persistence ----------
 let saveTimer = null;
-function persist() {
-  if (saveTimer) return;
-  saveTimer = setTimeout(() => {
-    saveTimer = null;
-    try {
-      if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-      fs.writeFileSync(SAVE_FILE, JSON.stringify(game.serialize()));
-    } catch (e) { console.warn('Save failed:', e.message); }
-  }, 2000);
+function saveNow() {
+  try {
+    if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+    const tmp = SAVE_FILE + '.tmp';
+    fs.writeFileSync(tmp, JSON.stringify(game.serialize()));               // 1) write to temp
+    try { if (fs.existsSync(SAVE_FILE)) fs.copyFileSync(SAVE_FILE, SAVE_FILE + '.bak'); } catch(e){}  // 2) keep last-good backup
+    fs.renameSync(tmp, SAVE_FILE);                                          // 3) atomic swap (never a half file)
+  } catch (e) { console.warn('Save failed:', e.message); }
 }
+function persist() { if (saveTimer) return; saveTimer = setTimeout(() => { saveTimer = null; saveNow(); }, 2000); }
+function flushSave() { if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; } saveNow(); }
 
 // ============================================================
 //  Static file server
@@ -272,4 +278,6 @@ httpServer.listen(PORT, () => {
   console.log(`  (share the Network URL with players on your LAN)\n`);
 });
 
-process.on('SIGINT', () => { try { fs.mkdirSync(DATA_DIR,{recursive:true}); fs.writeFileSync(SAVE_FILE, JSON.stringify(game.serialize())); } catch(e){} process.exit(0); });
+function shutdown(){ try { flushSave(); } catch(e){} process.exit(0); }
+process.on('SIGTERM', shutdown);   // systemctl restart/stop sends this — flush before dying
+process.on('SIGINT', shutdown);
