@@ -47,7 +47,7 @@ const MAXTIER=5, BOT_TIER=3, SNIPER_BLIND=160; const TIER_COST={2:600,3:1200,4:2
 const HEAVY_CLASSES=['VetTrooper','HeavyWeapons','Officer'];
 function weightCapacity(level){ return 8 + Math.floor(level/5)*2; }
 const LEVELUP_BONUS=20;                 // coins per level gained
-const BUILD='hvpb-2026.06.14.13';        // bump on each change; shown in-game to verify deploys
+const BUILD='hvpb-2026.06.14.14';        // bump on each change; shown in-game to verify deploys
 
 // progression
 const CLASS_UNLOCK_LEVEL=10, LVL_BASE=2, LVL_STEP=1;
@@ -321,7 +321,7 @@ class Game {
     p.cls=cls; p.equip=this.defaultEquip(cls);
     const st=this.stats(p); p.maxhp=st.hp; p.hp=st.hp; p.ammo=st.ammoPool; p.cool=0;
     this.emit({type:'msg',text:`${p.name} switched to ${cls}${refund?` (+${refund} refunded)`:''}.`}); this.savePrefs(p);
-    return {ok:true, money:this.getMoney(p), refund, inv:this.inv[p.key]||{}, owned:this.ownedSet(p.key)}; }
+    return {ok:true, money:this.getMoney(p), refund, cls:p.cls, equip:p.equip, inv:this.inv[p.key]||{}, owned:this.ownedSet(p.key)}; }
   canEquip(p,cat,id){ const def=CATALOG[cat][id]; if(!def) return false;
     if(cat==='weapon' && !CLASSES[p.cls].weapons.includes(id)) return false;
     if(cat==='gadget' && id!=='none' && !CLASSES[p.cls].gear.includes(id)) return false;
@@ -374,7 +374,7 @@ class Game {
     const refund=this._refundClear(p); p.equip=this.defaultEquip(p.cls);
     const st=this.stats(p); p.maxhp=st.hp; p.hp=st.hp; p.ammo=st.ammoPool; p.mineCharges=0; p.decoyCharges=0; p.hasTurret=false;
     this.emit({type:'msg',text:`${p.name} reset their loadout (+${refund} refunded).`}); this.savePrefs(p);
-    return {ok:true,money:this.getMoney(p),refund,inv:this.inv[p.key]||{},owned:this.ownedSet(p.key)}; }
+    return {ok:true,money:this.getMoney(p),refund,cls:p.cls,equip:p.equip,inv:this.inv[p.key]||{},owned:this.ownedSet(p.key)}; }
   setAnte(id,on,amt){ const p=this.players.get(id); if(!p) return {ok:false}; p.wantAnte=!!on; if(amt!==undefined){ const a=+amt; if(ANTE_OPTIONS.includes(a)) p.anteAmt=a; } return {ok:true,wantAnte:p.wantAnte,anteAmt:p.anteAmt}; }
   setReady(id,on){ const p=this.players.get(id); if(!p) return {ok:false}; p.ready=!!on; if(p.ready) p.afkRounds=0; return {ok:true,ready:p.ready}; }
   readyCount(){ let n=0; for(const p of this.players.values()) if(p.ready!==false) n++; return n; }

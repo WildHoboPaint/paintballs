@@ -97,6 +97,18 @@
   .anteBtn{border:none; border-radius:8px; padding:9px 16px; font-weight:800; cursor:pointer; font-family:inherit; font-size:14px}
   .anteOn{background:#2c9c4a; color:#fff} .anteOff{background:#26313d; color:#cfe0ee}
   #rbanner{position:absolute; top:32%; left:50%; transform:translateX(-50%); text-align:center; font-weight:900; font-size:clamp(34px,6vw,52px); letter-spacing:2px; text-shadow:0 3px 16px #000; z-index:18; pointer-events:none}
+  /* loadout redesign */
+  .ldsum{grid-column:1/-1; background:#0c141d; border:1px solid #243140; border-radius:10px; padding:9px 13px; font-size:13px; color:#cfe0ee; display:flex; gap:7px; align-items:center; flex-wrap:wrap}
+  .ldsum .ldk{color:#8aa0b3; font-weight:800; letter-spacing:.5px; text-transform:uppercase; font-size:10px; background:#16202b; padding:2px 7px; border-radius:6px}
+  .tabs button{transition:background .12s,border-color .12s}
+  .tabs button:hover{border-color:var(--accent)}
+  .item{transition:border-color .12s, box-shadow .12s}
+  .item button{transition:filter .12s}
+  .item button:hover:not(:disabled){filter:brightness(1.08)}
+  .item button.upbtn{background:linear-gradient(90deg,#7c5cff,#b07bff); color:#fff}
+  .item button.danger{background:linear-gradient(90deg,#ff6b6b,#e23b3b); color:#fff; flex:1}
+  .item button.ghostbtn{background:#26313d; color:#cfe0ee; flex:1}
+  .item button:disabled{background:#26313d!important; color:#6f8499!important; filter:none}
 </style>
 </head>
 <body>
@@ -198,8 +210,9 @@ let ws=null, myId=null, arena={w:2000,h:1500}, obstacles=[], terrain=null, catal
 let snap=null, view=new Map(), splats=[], feed=[], toasts=[], cam={x:0,y:0}, connected=false;
 let ter=null, terMini=null; const keys={}, mouse={x:0,y:0,down:false}; let reloadFlag=false, deployFlag=false, goldenFlag=false;
 let shopOpenedBy=null, activeTab='class', myLoadout=null, loadCfg=null, classUnlock=null;
+let lastBuy=null, pendingClass=null;
 let lobby=null, lobbyCanvas=null, freeCam={x:0,y:0}, storeCats=null;
-let actx=null, muted=false, prevAmmo=null, prevClip=null, prevDowned=false, bannerT=null; let peek=false; let myPos=null; let chat=[]; const CLIENT_BUILD='hvpb-2026.06.14.13';
+let actx=null, muted=false, prevAmmo=null, prevClip=null, prevDowned=false, bannerT=null; let peek=false; let myPos=null; let chat=[]; const CLIENT_BUILD='hvpb-2026.06.14.14';
 function aud(){ if(!actx){ try{ actx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } return actx; }
 function blip(type,freq,dur,vol,ramp){ if(muted) return; const a=aud(); if(!a) return; try{ const o=a.createOscillator(),g=a.createGain(); o.type=type; o.frequency.value=freq; if(ramp) o.frequency.exponentialRampToValueAtTime(Math.max(30,freq+ramp),a.currentTime+dur); g.gain.value=vol; g.gain.exponentialRampToValueAtTime(0.0001,a.currentTime+dur); o.connect(g); g.connect(a.destination); o.start(); o.stop(a.currentTime+dur); }catch(e){} }
 const sfx={
@@ -272,10 +285,13 @@ function onMsg(m){
     if(m.events) for(const ev of m.events) handleEvent(ev); }
   else if(m.t==='authfail'){ $('status').textContent='⚠ '+(m.msg||'Login failed'); try{ws.close();}catch(e){} connected=false; }
   else if(m.t==='chat'){ chat.push({from:m.from,team:m.team,text:m.text,t:14}); if(chat.length>10) chat.shift(); }
-  else if(m.t==='buyresult'){ if(m.money!=null) $('shopWallet').textContent=m.money; if(m.owned&&snap&&snap.you) snap.you.owned=m.owned; if(m.inv&&snap&&snap.you) snap.you.inv=m.inv; if(m.msg) toast(m.ok?('✅ '+m.msg):('❌ '+m.msg)); if(!$('shop').classList.contains('hidden')){buildTabs();buildGrid();} }
+  else if(m.t==='buyresult'){ if(m.money!=null) $('shopWallet').textContent=m.money; if(m.owned&&snap&&snap.you) snap.you.owned=m.owned; if(m.inv&&snap&&snap.you) snap.you.inv=m.inv; if(m.msg) toast(m.ok?('✅ '+m.msg):('❌ '+m.msg)); if(m.ok&&lastBuy) autoEquipBought(lastBuy); lastBuy=null; if(!$('shop').classList.contains('hidden')){buildTabs();buildGrid();updateShopLive();} }
   else if(m.t==='loadresult'){ if(m.money!=null) $('shopWallet').textContent=m.money; if(!m.ok){ toast('❌ '+(m.msg||'invalid loadout')); syncLoadout(); } if(!$('shop').classList.contains('hidden')){buildTabs();buildGrid();updateShopLive();} }
-  else if(m.t==='classresult'){ if(m.money!=null) $('shopWallet').textContent=m.money; if(!m.ok && m.msg) toast('❌ '+m.msg); else { if(snap&&snap.you){ snap.you.inv=m.inv||{}; snap.you.owned=m.owned||[]; } if(m.refund) toast('Class switched (+'+m.refund+' refunded)'); myLoadout=null; } if(!$('shop').classList.contains('hidden')){buildTabs();buildGrid();} }
-  else if(m.t==='resetresult'){ if(m.money!=null) $('shopWallet').textContent=m.money; if(m.ok){ if(snap&&snap.you){ snap.you.inv=m.inv||{}; snap.you.owned=m.owned||[]; } myLoadout={weapon:(classesInfo[snap.you.cls]||{}).defWeapon, wmods:[], chips:[], gadget:'none'}; toast('↺ Loadout reset (+'+(m.refund||0)+' refunded)'); } else if(m.msg) toast('❌ '+m.msg); if(!$('shop').classList.contains('hidden')){buildTabs();buildGrid();updateShopLive();} }
+  else if(m.t==='classresult'){ if(m.money!=null) $('shopWallet').textContent=m.money;
+    if(!m.ok){ if(m.msg) toast('❌ '+m.msg); }
+    else { if(snap&&snap.you){ if(m.cls) snap.you.cls=m.cls; if(m.equip) snap.you.equip=m.equip; snap.you.inv=m.inv||{}; snap.you.owned=m.owned||[]; } syncLoadout(); toast('✅ Switched to '+(m.cls||'class')+(m.refund?' (+'+m.refund+' refunded)':'')); }
+    pendingClass=null; if(!$('shop').classList.contains('hidden')){buildTabs();buildGrid();updateShopLive();} }
+  else if(m.t==='resetresult'){ if(m.money!=null) $('shopWallet').textContent=m.money; if(m.ok){ if(snap&&snap.you){ if(m.equip) snap.you.equip=m.equip; snap.you.inv=m.inv||{}; snap.you.owned=m.owned||[]; } syncLoadout(); toast('↺ Loadout reset'+(m.refund?' (+'+m.refund+' refunded)':'')); } else if(m.msg) toast('❌ '+m.msg); if(!$('shop').classList.contains('hidden')){buildTabs();buildGrid();updateShopLive();} }
   else if(m.t==='voteresult'){ if(!$('shop').classList.contains('hidden') && activeTab==='modes') buildGrid(); }
   else if(m.t==='upgraderesult'){ if(m.money!=null) $('shopWallet').textContent=m.money; if(m.tiers&&snap&&snap.you) snap.you.tiers=m.tiers; if(m.msg) toast(m.ok?('✅ '+m.msg):('❌ '+m.msg)); if(!$('shop').classList.contains('hidden')){buildGrid();} }
   else if(m.t==='classupresult'){ if(m.money!=null) $('shopWallet').textContent=m.money; if(m.classTiers&&snap&&snap.you) snap.you.classTiers=m.classTiers; if(m.msg) toast(m.ok?('✅ '+m.msg):('❌ '+m.msg)); if(!$('shop').classList.contains('hidden')){buildGrid();} }
@@ -596,31 +612,49 @@ function ldWeight(ld){ let w=(loadCfg?loadCfg.weaponWt:4); for(const m of ld.wmo
 function syncLoadout(){ const y=snap&&snap.you; if(!y||!y.equip) return; myLoadout={weapon:y.equip.weapon, wmods:(y.equip.wmods||[]).slice(), chips:(y.equip.chips||[]).slice(), gadget:y.equip.gadget||'none'}; }
 function sendLoadout(){ if(myLoadout) send({t:'loadout', weapon:myLoadout.weapon, wmods:myLoadout.wmods, chips:myLoadout.chips, gadget:myLoadout.gadget}); }
 function ownsIt(cat,id){ const y=snap.you; const it=catalog[cat]&&catalog[cat][id]; if(it&&it.cost===0) return true; if(cat==='weapon'&&(classesInfo[y.cls]||{}).defWeapon===id) return true; return (y.owned||[]).includes(cat+':'+id); }
-function buildTabs(){ const t=$('tabs'); t.innerHTML=''; const cats=storeCats||['class','weapon','mods','armor','gadget','modes'];
-  for(const cat of cats){ const b=document.createElement('button'); b.className=(cat===activeTab?'sel':''); b.textContent=TAB_LABELS[cat]||cat; b.onclick=()=>{ activeTab=cat; buildTabs(); buildGrid(); }; t.appendChild(b); }
-  const ab=document.querySelector('.antebox'); if(ab) ab.style.display=(!storeCats||storeCats.includes('class'))?'flex':'none'; }
+function ldSummary(y){ const el=document.createElement('div'); el.className='ldsum'; if(!myLoadout) return el;
+  const wN=(catalog.weapon[myLoadout.weapon]||{}).name||myLoadout.weapon;
+  const gN=(myLoadout.gadget&&myLoadout.gadget!=='none')?((catalog.gadget[myLoadout.gadget]||{}).name||myLoadout.gadget):'No gadget';
+  const cap=y.weightCap||12, w=ldWeight(myLoadout);
+  el.innerHTML=`<span class="ldk">Equipped</span> <b style="color:${CLS_COLORS[y.cls]||'#fff'}">${y.cls}</b> · <b>${wN}</b> · ${myLoadout.wmods.length} mod${myLoadout.wmods.length===1?'':'s'} · ${myLoadout.chips.length} chip${myLoadout.chips.length===1?'':'s'} · ${gN} · <b style="color:${w>cap?'#ff6b6b':'#9be36a'}">⚖ ${w}/${cap}</b>`;
+  return el; }
+function autoEquipBought(b){ if(!myLoadout) syncLoadout(); if(!myLoadout||!b) return;
+  if(b.cat==='weapon'){ myLoadout.weapon=b.id; sendLoadout(); }
+  else if(b.cat==='gadget'){ myLoadout.gadget=b.id; sendLoadout(); }
+  else if(b.cat==='wmod'){ const s=(loadCfg?loadCfg.wmodSlots:2); if(myLoadout.wmods.length<s){ myLoadout.wmods.push(b.id); sendLoadout(); } }
+  else if(b.cat==='chip'){ const s=(loadCfg?loadCfg.chipSlots:5); if(myLoadout.chips.length<s){ myLoadout.chips.push(b.id); sendLoadout(); } } }
+function buildTabs(){ const t=$('tabs'); t.innerHTML=''; const cats=['class','weapon','mods','armor','gadget','modes'];
+  for(const cat of cats){ const b=document.createElement('button'); b.className=(cat===activeTab?'sel':''); b.textContent=TAB_LABELS[cat]||cat; b.onclick=()=>{ activeTab=cat; pendingClass=null; buildTabs(); buildGrid(); }; t.appendChild(b); }
+  const ab=document.querySelector('.antebox'); if(ab) ab.style.display='flex'; }
 function buildGrid(){
   if(!snap||!snap.you||!catalog) return; const y=snap.you; if(!myLoadout) syncLoadout(); const grid=$('grid'); grid.innerHTML='';
   const cap=y.weightCap||12, curW=myLoadout?ldWeight(myLoadout):0;
+  if(activeTab!=='modes') grid.appendChild(ldSummary(y));
   if(snap.phase==='active' && activeTab!=='modes'){ const w=document.createElement('div'); w.className='item lock'; w.innerHTML='<div class="in"><span>\uD83D\uDD12 Loadout locked</span></div><div class="id">Gear changes only between rounds, in the holding area. (Mode voting still works.)</div>'; grid.appendChild(w); return; }
   if(activeTab==='class'){
     { const CTc={2:600,3:1200,4:2000,5:3000}; const perks={Sniper:'Sharper vision: fewer blind squares up close.',Scout:'Faster movement speed.',Infiltrator:'Faster movement speed (longer invisibility coming soon).'};
       if(perks[y.cls]){ const ct=(y.classTiers&&y.classTiers[y.cls])||y.classTier||1;
         const el=document.createElement('div'); el.className='item eq';
-        el.innerHTML=`<div class="in"><span>⭐ ${y.cls} Class Upgrade <span style="color:#9be36a">T${ct}/5</span></span></div><div class="id">${perks[y.cls]}</div>`;
+        el.innerHTML=`<div class="in"><span>⭐ CLASS PERK · ${y.cls} <span style="color:#9be36a">T${ct}/5</span></span></div><div class="id">Improves your class ability (separate from the weapon). ${perks[y.cls]}</div>`;
         const row=document.createElement('div'); row.style.cssText='display:flex;gap:6px;margin-top:6px';
         if(ct>=5){ const b=document.createElement('button'); b.textContent='Max Class Tier'; b.disabled=true; row.appendChild(b); }
         else { const cost=CTc[ct+1], lvlReq=ct*3; const up=document.createElement('button');
           if((y.level||1)<lvlReq){ up.textContent=`Upgrade (Lv ${lvlReq})`; up.disabled=true; }
           else if(y.money<cost){ up.textContent=`Upgrade 💰${cost}`; up.disabled=true; }
-          else { up.textContent=`Upgrade → T${ct+1} (💰${cost})`; up.onclick=()=>send({t:'upgradeclass'}); }
+          else { up.className='upbtn'; up.textContent=`Class Upgrade → T${ct+1} (💰${cost})`; up.onclick=()=>send({t:'upgradeclass'}); }
           row.appendChild(up); }
         el.appendChild(row); grid.appendChild(el); } }
     for(const k in classesInfo){ const ci=classesInfo[k]; const req=(classUnlock&&classUnlock[k])||(k==='Trooper'?1:10); const locked=(y.level||1)<req; const cur=y.cls===k;
       const el=document.createElement('div'); el.className='item'+(cur?' eq':'')+(locked?' lock':'');
       el.innerHTML=`<div class="in"><span><span style="color:${CLS_COLORS[k]||'#fff'}">●</span> ${k}</span>${locked?`<span class="cost">Lv ${req}</span>`:''}</div><div class="id">${ci.desc||''}</div>`;
-      const b=document.createElement('button'); if(cur){ b.textContent='Selected'; b.className='equip'; b.disabled=true; } else if(locked){ b.textContent='Unlocks at Lv '+req; b.disabled=true; } else { b.textContent='Select'; b.className='equip'; b.onclick=()=>{ if(confirm('Switch to '+k+'? This resets your loadout.')) send({t:'class',cls:k}); }; }
-      el.appendChild(b); grid.appendChild(el); }
+      if(cur){ const b=document.createElement('button'); b.textContent='Selected ✓'; b.className='equip'; b.disabled=true; el.appendChild(b); }
+      else if(locked){ const b=document.createElement('button'); b.textContent='Unlocks at Lv '+req; b.disabled=true; el.appendChild(b); }
+      else if(pendingClass===k){ const row=document.createElement('div'); row.style.cssText='display:flex;gap:6px';
+        const yes=document.createElement('button'); yes.className='danger'; yes.textContent='Confirm (resets gear)'; yes.onclick=()=>{ pendingClass=null; send({t:'class',cls:k}); };
+        const no=document.createElement('button'); no.className='ghostbtn'; no.textContent='Cancel'; no.onclick=()=>{ pendingClass=null; buildGrid(); };
+        row.appendChild(yes); row.appendChild(no); el.appendChild(row); }
+      else { const b=document.createElement('button'); b.className='equip'; b.textContent='Select'; b.onclick=()=>{ pendingClass=k; buildGrid(); }; el.appendChild(b); }
+      grid.appendChild(el); }
     return;
   }
   if(activeTab==='modes'){
@@ -645,13 +679,13 @@ function buildGrid(){
         const b=document.createElement('button');
         if(sel){ b.textContent='Selected ✓'; b.className='equip'; b.disabled=true; }
         else if(owned){ b.textContent='Select'; b.className='equip'; b.onclick=()=>{ myLoadout.weapon=id; sendLoadout(); buildGrid(); }; }
-        else if(afford){ b.textContent='Buy'; b.onclick=()=>send({t:'buy',item:'weapon:'+id}); }
+        else if(afford){ b.textContent='Buy & Equip'; b.onclick=()=>{ lastBuy={cat:'weapon',id}; send({t:'buy',item:'weapon:'+id}); }; }
         else { b.textContent='Need 💰'+it.cost; b.disabled=true; }
         row.appendChild(b);
-        if(owned && tier<5){ const cost=TC[tier+1], lvlReq=tier*3; const up=document.createElement('button');
+        if(owned && tier<5){ const cost=TC[tier+1], lvlReq=tier*3; const up=document.createElement('button'); up.className='upbtn';
           if(y.level<lvlReq){ up.textContent=`Upgrade (Lv ${lvlReq})`; up.disabled=true; }
           else if(y.money<cost){ up.textContent=`Upgrade 💰${cost}`; up.disabled=true; }
-          else { up.textContent=`Upgrade → T${tier+1} (💰${cost})`; up.onclick=()=>send({t:'upgrade',item:id}); }
+          else { up.textContent=`Weapon Upgrade → T${tier+1} (💰${cost})`; up.onclick=()=>send({t:'upgrade',item:id}); }
           row.appendChild(up);
         }
       }
@@ -668,7 +702,7 @@ function buildGrid(){
       if(!allowed){ b.textContent='N/A for '+y.cls; b.disabled=true; }
       else if(sel){ b.textContent='Selected ✓'; b.className='equip'; b.disabled=true; }
       else if(owned){ b.textContent='Select'; b.className='equip'; b.onclick=()=>{ myLoadout.gadget=id; sendLoadout(); buildGrid(); }; }
-      else if(afford){ b.textContent='Buy'; b.onclick=()=>send({t:'buy',item:'gadget:'+id}); }
+      else if(afford){ b.textContent='Buy & Equip'; b.onclick=()=>{ lastBuy={cat:'gadget',id}; send({t:'buy',item:'gadget:'+id}); }; }
       else { b.textContent='Need 💰'+it.cost; b.disabled=true; }
       el.appendChild(b); grid.appendChild(el);
     }
@@ -690,7 +724,7 @@ function buildGrid(){
     else {
       const buy=document.createElement('button'); const camoCapHit = it.camo && ownedN>=maxCamo;
       if(ownedN>=slots || camoCapHit){ buy.textContent='Owned max'; buy.disabled=true; }
-      else if(afford){ buy.textContent='Buy 💰'+it.cost; buy.onclick=()=>send({t:'buy',item:cat+':'+id}); }
+      else if(afford){ buy.textContent='Buy 💰'+it.cost; buy.onclick=()=>{ lastBuy={cat,id}; send({t:'buy',item:cat+':'+id}); }; }
       else { buy.textContent='Need 💰'+it.cost; buy.disabled=true; }
       row.appendChild(buy);
       if(ownedN>0){ const add=document.createElement('button'); add.className='equip';
