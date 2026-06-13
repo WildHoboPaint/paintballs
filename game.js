@@ -42,11 +42,12 @@ const CAPTURE_TARGET=3;                                // CTF captures to win
 const TOURNEY_WINS=3;                                  // best of 5
 const ANTE_OPTIONS=[100,500,1000];                    // selectable buy-in amounts
 const WMOD_SLOTS=2, CHIP_SLOTS=5, MAX_CAMO=2, BASE_AMMO=30, WEAPON_WT=4, BALL_SPEED=120, GOLDEN_CD=2.0;
+const LAST_GASP=2.0;   // seconds you can still return fire after being hit (draw / double-splat window)
 const MAXTIER=5, BOT_TIER=3, SNIPER_BLIND=160; const TIER_COST={2:600,3:1200,4:2000,5:3000};   // weapon upgrade tiers
 const HEAVY_CLASSES=['VetTrooper','HeavyWeapons','Officer'];
 function weightCapacity(level){ return 8 + Math.floor(level/5)*2; }
 const LEVELUP_BONUS=20;                 // coins per level gained
-const BUILD='hvpb-2026.06.14.10';        // bump on each change; shown in-game to verify deploys
+const BUILD='hvpb-2026.06.14.12';        // bump on each change; shown in-game to verify deploys
 
 // progression
 const CLASS_UNLOCK_LEVEL=10, LVL_BASE=2, LVL_STEP=1;
@@ -268,7 +269,7 @@ class Game {
   newFighter(team,cls,isBot){
     const s=this.teamSpawn(team);
     const f={ id:this.nextId++, bot:!!isBot, team, cls, x:s.x,y:s.y,r:14,aim:team==='blue'?0:Math.PI,
-      hp:1,maxhp:1,alive:true, ammo:0,reloading:false,reloadT:0,cool:0, kills:0,deaths:0,
+      hp:1,maxhp:1,alive:true, ammo:0,reloading:false,reloadT:0,cool:0, downed:false,downT:0, kills:0,deaths:0,
       wantAnte:false, anteIn:false, zone:null, equip:this.defaultEquip(cls), mineCharges:0, decoyCharges:0, hasTurret:false,
       goldenArmed:false, goldenCD:0, roundKills:0, anteAmt:100, ready:true, activeThisRound:false, afkRounds:0, spawnedThisRound:false, golden:false, fast:false, shield:0, spdMul:1, modeVotes:{},
       input:{mx:0,my:0,aim:0,fire:false,reload:false,deploy:false},
@@ -424,10 +425,13 @@ class Game {
     else if(g==='decoy'){ if(f.decoyCharges<=0) return; f.decoyCharges--; this.decoys.push({id:this.nextId++,x:f.x,y:f.y,team:f.team,cls:f.cls,life:12}); }
   }
   applyDamage(target,dmg,attacker,pierce){
-    if(!target.alive) return;
+    if(!target.alive||target.downed) return;
     // One hit eliminates. Armor = chance the paintball bounces off (unless armor-piercing).
     if(!pierce && Math.random() < this.deflectChance(target)){ this.emit({type:'deflect',x:target.x,y:target.y,c:'#e6edf3'}); return; }
     if(target.shield>0){ target.shield--; this.emit({type:'deflect',x:target.x,y:target.y,c:'#ffd700'}); return; }   // super-bot soaks an extra hit
+    if(!target.bot){                                                     // players get a 2s last-gasp to return fire (draw / double-splat); they resolve out when it expires
+      target.downed=true; target.downT=LAST_GASP; target._downer=attacker||null;
+      this.emit({type:'downed',id:target.id,x:Math.round(target.x),y:Math.round(target.y),c:attacker?CLASSES[attacker.cls].color:'#fff'}); return; }
     target.alive=false; target.deaths++;
     if(this.mode==='ctf'){ for(const fl of this.flags) if(fl.carrier===target.id){ fl.carrier=null; fl.atHome=false; fl.dropT=20; fl.x=target.x; fl.y=target.y; } }
     this.emit({type:'splat',x:target.x,y:target.y,c:target.golden?'#ffd700':(attacker?CLASSES[attacker.cls].color:'#fff')});
@@ -437,6 +441,13 @@ class Game {
     if(attacker){ attacker.kills++; attacker.roundKills=(attacker.roundKills||0)+1; if(!attacker.bot){ if(rew) this.addMoney(attacker,rew); if(xpg) this.gainXp(attacker,xpg); } }
     if(target.bot && target.golden && !this.superRound){ this.superNext=true; this.goldenEnded=true; this.emit({type:'goldenbot',by:attacker?attacker.name:'?'}); }
   }
+  finishDown(f){ if(!f.downed) return; f.downed=false; f.alive=false; f.deaths++; const attacker=f._downer; f._downer=null;
+    if(this.mode==='ctf'){ for(const fl of this.flags) if(fl.carrier===f.id){ fl.carrier=null; fl.atHome=false; fl.dropT=20; fl.x=f.x; fl.y=f.y; } }
+    this.emit({type:'splat',x:f.x,y:f.y,c:attacker?CLASSES[attacker.cls].color:'#fff'});
+    const mul=this.doubleRewards?2:1; const base=SPLAT_REWARD;
+    const rew=(attacker&&!attacker.bot&&!this.tournament)?base*mul:0, xpg=(attacker&&!attacker.bot)?((this.tournament?2:1)*mul):0;
+    this.emit({type:'elim',byId:attacker?attacker.id:0,by:attacker?attacker.name:'?',byTeam:attacker?attacker.team:'',vtId:f.id,vt:f.name,vtTeam:f.team, rew, xp:xpg});
+    if(attacker){ attacker.kills++; attacker.roundKills=(attacker.roundKills||0)+1; if(!attacker.bot){ if(rew) this.addMoney(attacker,rew); if(xpg) this.gainXp(attacker,xpg); } } }
   splashDamage(x,y,radius,team,attacker,color){
     this.emit({type:'splash',x:Math.round(x),y:Math.round(y),r:Math.round(radius),c:color||(attacker?CLASSES[attacker.cls].color:'#ffd166')});
     for(const f of [...this.players.values(),...this.bots]){ if(!f.alive||f.team===team) continue;
@@ -510,7 +521,7 @@ class Game {
       const st=this.stats(f);
       if(this.mode==='invaders' && !f.bot){ f.x=ARENA.w/2+rand(-70,70); f.y=ARENA.h/2+rand(-70,70); }      // Bot Invaders: team starts centered
       else if(!(this.mode==='invaders'&&f.bot)){ const s=this.teamSpawn(f.team); f.x=s.x; f.y=s.y; }   // edge-bots keep their edge spot
-      f.aim=f.team==='blue'?0:Math.PI; f.maxhp=st.hp; f.hp=st.hp; f.alive=(f.bot?true:p_ready(f)); f.ammo=(this.mode==='invaders'?99999:st.ammoPool); f.clip=st.mag; f.reloading=false; f.reloadT=0; f.cool=0; f.goldenArmed=false; f.goldenCD=0; f.roundKills=0; f.activeThisRound=false; f.spawnedThisRound=(f.bot?false:p_ready(f));
+      f.aim=f.team==='blue'?0:Math.PI; f.maxhp=st.hp; f.hp=st.hp; f.alive=(f.bot?true:p_ready(f)); f.ammo=(this.mode==='invaders'?99999:st.ammoPool); f.clip=st.mag; f.reloading=false; f.reloadT=0; f.downed=false; f.downT=0; f.cool=0; f.goldenArmed=false; f.goldenCD=0; f.roundKills=0; f.activeThisRound=false; f.spawnedThisRound=(f.bot?false:p_ready(f));
       f.mineCharges=(GADGETS[f.equip.gadget]&&GADGETS[f.equip.gadget].charges)||0;
       f.decoyCharges=f.equip.gadget==='decoy'?(GADGETS.decoy.charges):0;
       f.hasTurret=false;
@@ -522,6 +533,7 @@ class Game {
   }
   endRound(winner){
     this.phase='intermission'; this.phaseTimer=SHOP_TIME;
+    for(const p of this.players.values()){ p.downed=false; p.downT=0; }
     const mode=this.mode;
     for(const p of this.players.values()){ if(!p.spawnedThisRound) continue;
       if(p.activeThisRound) p.afkRounds=0;
@@ -630,6 +642,7 @@ class Game {
     if(this.phase==='intermission'){ this.phaseTimer-=dt; for(const p of this.players.values()) this.moveInLobby(p,dt); if(this.phaseTimer<=0){ if(this.readyCount()>0) this.startRound(); else this.phaseTimer=5; } return; }
     this.roundTimer-=dt;
     for(const p of this.players.values()){ if(!p.alive) continue; const st=this.stats(p);
+      if(p.downed){ p.downT-=dt; p.aim=p.input.aim; if(p.input.fire) this.fire(p); if(p.downT<=0) this.finishDown(p); continue; }   // last gasp
       const m=Math.hypot(p.input.mx,p.input.my)||1;
       if(p.input.mx||p.input.my){ const mult=st.jetpack?1:SPEED_MULT[this.terrainCode(p.x,p.y)]; const sp=st.speed*mult; p.x+=p.input.mx/m*sp*dt; p.y+=p.input.my/m*sp*dt; }
       p.aim=p.input.aim; this.collide(p); if(p.input.reload) this.startReload(p); if(p.input.fire) this.fire(p); }
@@ -694,7 +707,7 @@ class Game {
 
   // ---- snapshot ----
   publicFighter(f){ return {id:f.id,n:f.name,tm:f.team,cls:f.cls,x:Math.round(f.x),y:Math.round(f.y),a:+f.aim.toFixed(2),hp:Math.max(0,Math.round(f.hp)),mh:f.maxhp,al:f.alive,bot:f.bot,
-    cam:this.isCamo(f)?1:0, jet:f.equip&&f.equip.gadget==='jetpack'?1:0, gold:f.golden?1:0, fast:f.fast?1:0, sh:f.shield||0}; }
+    cam:this.isCamo(f)?1:0, jet:f.equip&&f.equip.gadget==='jetpack'?1:0, gold:f.golden?1:0, fast:f.fast?1:0, sh:f.shield||0, dn:f.downed?1:0}; }
   snapshot(id,events){
     const me=this.players.get(id); const spectate=me&&!me.alive&&this.phase==='active';
     const lobby=this.phase==='intermission';
@@ -717,7 +730,7 @@ class Game {
     let mines=[]; if(me) mines=this.mines.filter(m=>m.team===me.team).map(m=>({x:Math.round(m.x),y:Math.round(m.y)}));
     let you=null;
     if(me){ const st=this.stats(me); const li=levelInfo(this.getXp(me));
-      you={ id:me.id,name:me.name,cls:me.cls,team:me.team,hp:Math.max(0,Math.round(me.hp)),maxhp:me.maxhp,alive:me.alive,
+      you={ id:me.id,name:me.name,cls:me.cls,team:me.team,hp:Math.max(0,Math.round(me.hp)),maxhp:me.maxhp,alive:me.alive,downed:!!me.downed,downFrac:(me.downed?Math.max(0,Math.min(1,me.downT/LAST_GASP)):0),
         ammo:(this.mode==='invaders'?-1:me.ammo),mag:st.ammoPool,clip:(me.clip==null?st.mag:me.clip),clipMax:st.mag,reloading:!!me.reloading,reloadFrac:(me.reloading&&st.reload>0?Math.max(0,Math.min(1,1-me.reloadT/st.reload)):1),kills:me.kills,deaths:me.deaths,money:this.getMoney(me),
         x:Math.round(me.x),y:Math.round(me.y),terrain:this.terrainCode(me.x,me.y),wantAnte:me.wantAnte,anteIn:me.anteIn,
         level:li.level, xpInto:li.into, xpNeed:li.need, unlockLevel:CLASS_UNLOCK_LEVEL, classUnlocked:li.level>=CLASS_UNLOCK_LEVEL,

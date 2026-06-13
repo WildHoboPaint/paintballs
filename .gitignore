@@ -33,3 +33,7 @@ public/sprites/armor.png
 public/sprites/armor2.png
 public/sprites/weapons.png
 public/sprites/weapons2.png
+
+# raw sniper sprite uploads (processed into Sniper.png)
+public/sprites/snipernew*.png
+public/sprites/engineerturret*.png
