@@ -3,14 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>High Velocity Paintball — Online</title>
+<title>High Velocity Paintball Online</title>
 <style>
   :root{ --blue:#3da9fc; --red:#ff5470; --ink:#e8f0f7; --muted:#8aa0b3; --accent:#ffd166; --coin:#ffcf4d; --panel:#141b24; --xp:#7c5cff; }
   *{box-sizing:border-box; margin:0; padding:0}
   html,body{height:100%}
   body{background:#080b10; color:var(--ink); font-family:"Segoe UI",system-ui,Arial,sans-serif; overflow:hidden; -webkit-user-select:none; user-select:none;}
   #wrap{position:relative; width:100vw; height:100vh}
-  canvas#cv{display:block; width:100%; height:100%; background:#244a26; cursor:crosshair}
+  canvas#cv{display:block; width:100%; height:100%; background:#244a26; cursor:crosshair; filter:brightness(1.12) saturate(1.04)}
   .overlay{position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center;
     background:linear-gradient(180deg,rgba(8,11,16,.93),rgba(8,11,16,.98)); backdrop-filter:blur(3px); z-index:30; padding:24px; overflow:auto;}
   .hidden{display:none !important}
@@ -113,7 +113,7 @@
     <div id="chat"><div id="chatlog"></div><input id="chatInput" maxlength="160" placeholder="Press Enter to chat" autocomplete="off"></div>
     <div id="lowerleft">
       <div id="hpwrap">
-        <div class="lab"><span id="clsName">Trooper</span><span title="Armor bounce chance — otherwise one hit is out"><span id="hpNum">0%</span> deflect</span></div>
+        <div class="lab"><span id="clsName">Trooper</span><span title="Armor bounce chance, otherwise one hit is out"><span id="hpNum">0%</span> deflect</span></div>
         <div id="hpbar"><div id="hpfill"></div></div>
         <div id="ammo"></div>
         <div id="gadgetline"></div>
@@ -122,7 +122,7 @@
       </div>
     </div>
     <canvas id="minimap" width="180" height="135"></canvas>
-    <div id="elim" class="hidden"><div class="big">SPLATTED</div><div class="small">Spectating — back in the next round</div></div>
+    <div id="elim" class="hidden"><div class="big">SPLATTED</div><div class="small">Spectating, back in the next round</div></div>
     <div id="toasts"></div>
     <div id="rbanner" class="hidden"></div>
   </div>
@@ -197,7 +197,7 @@ let snap=null, view=new Map(), splats=[], feed=[], toasts=[], cam={x:0,y:0}, con
 let ter=null, terMini=null; const keys={}, mouse={x:0,y:0,down:false}; let reloadFlag=false, deployFlag=false, goldenFlag=false;
 let shopOpenedBy=null, activeTab='class', myLoadout=null, loadCfg=null, classUnlock=null;
 let lobby=null, lobbyCanvas=null, freeCam={x:0,y:0}, storeCats=null;
-let actx=null, muted=false, prevAmmo=null, bannerT=null; let peek=false; let myPos=null; let chat=[]; const CLIENT_BUILD='hvpb-2026.06.14.6';
+let actx=null, muted=false, prevAmmo=null, prevClip=null, bannerT=null; let peek=false; let myPos=null; let chat=[]; const CLIENT_BUILD='hvpb-2026.06.14.7';
 function aud(){ if(!actx){ try{ actx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } return actx; }
 function blip(type,freq,dur,vol,ramp){ if(muted) return; const a=aud(); if(!a) return; try{ const o=a.createOscillator(),g=a.createGain(); o.type=type; o.frequency.value=freq; if(ramp) o.frequency.exponentialRampToValueAtTime(Math.max(30,freq+ramp),a.currentTime+dur); g.gain.value=vol; g.gain.exponentialRampToValueAtTime(0.0001,a.currentTime+dur); o.connect(g); g.connect(a.destination); o.start(); o.stop(a.currentTime+dur); }catch(e){} }
 const sfx={
@@ -222,7 +222,7 @@ addEventListener('keydown',e=>{ if(e.target && (e.target.id==='chatInput'||e.tar
   if(connected && k==='b') toggleShop('manual');
   if(connected && k==='e' && snap && snap.you && snap.you.zone && $('shop').classList.contains('hidden')) openStore(snap.you.zone);
   if(k==='m'){ muted=!muted; toast(muted?'🔇 sound off':'🔊 sound on'); }
-  if(connected && (k==='tab'||k==='v')){ peek=!peek; setPeekBtn(); toast(peek?'🔍 Pan mode ON — move mouse to look around':'Pan mode off'); }
+  if(connected && (k==='tab'||k==='v')){ peek=!peek; setPeekBtn(); toast(peek?'🔍 Pan mode ON, move mouse to look around':'Pan mode off'); }
   if(connected && k==='y' && snap && snap.you){ send({t:'ready', on:!(snap.you.ready!==false)}); }
   if(connected && k==='f' && snap && snap.you && snap.you.golden){ goldenFlag=true; }
   if([' ','arrowup','arrowdown','arrowleft','arrowright','tab'].includes(k)) e.preventDefault(); });
@@ -261,7 +261,7 @@ function onMsg(m){
     { const vd=$('ver'); if(vd){ if(m.build&&m.build!==CLIENT_BUILD){ vd.textContent='⚠ client '+CLIENT_BUILD+' ≠ server '+m.build; vd.style.color='#ffb84d'; } else { vd.textContent='build '+CLIENT_BUILD+' ✓ live'; vd.style.color='#5b8c5b'; } } } }
   else if(m.t==='map'){ arena=m.arena; terrain=m.terrain; mm.height=Math.round(180*arena.h/arena.w); prerenderTerrain(); }
   else if(m.t==='state'){ snap=m;
-    if(m.you){ if(prevAmmo!=null && prevAmmo>=0 && m.you.alive && m.you.ammo>=0 && m.you.ammo<prevAmmo) sfx.shoot(); prevAmmo=m.you.ammo;
+    if(m.you){ if(prevClip!=null && m.you.alive && m.you.clip!=null && m.you.clip<prevClip) sfx.shoot(); prevClip=(m.you.clip==null?prevClip:m.you.clip); prevAmmo=m.you.ammo;
       if(!myPos || !m.you.alive || m.phase!=='active'){ myPos={x:m.you.x,y:m.you.y}; }
       else { const dx=m.you.x-myPos.x, dy=m.you.y-myPos.y, d=Math.hypot(dx,dy); if(d>120){ myPos.x=m.you.x; myPos.y=m.you.y; } else { myPos.x+=dx*0.2; myPos.y+=dy*0.2; } } }
     if(m.events) for(const ev of m.events) handleEvent(ev); }
@@ -273,6 +273,7 @@ function onMsg(m){
   else if(m.t==='resetresult'){ if(m.money!=null) $('shopWallet').textContent=m.money; if(m.ok){ if(snap&&snap.you){ snap.you.inv=m.inv||{}; snap.you.owned=m.owned||[]; } myLoadout={weapon:(classesInfo[snap.you.cls]||{}).defWeapon, wmods:[], chips:[], gadget:'none'}; toast('↺ Loadout reset (+'+(m.refund||0)+' refunded)'); } else if(m.msg) toast('❌ '+m.msg); if(!$('shop').classList.contains('hidden')){buildTabs();buildGrid();updateShopLive();} }
   else if(m.t==='voteresult'){ if(!$('shop').classList.contains('hidden') && activeTab==='modes') buildGrid(); }
   else if(m.t==='upgraderesult'){ if(m.money!=null) $('shopWallet').textContent=m.money; if(m.tiers&&snap&&snap.you) snap.you.tiers=m.tiers; if(m.msg) toast(m.ok?('✅ '+m.msg):('❌ '+m.msg)); if(!$('shop').classList.contains('hidden')){buildGrid();} }
+  else if(m.t==='classupresult'){ if(m.money!=null) $('shopWallet').textContent=m.money; if(m.classTiers&&snap&&snap.you) snap.you.classTiers=m.classTiers; if(m.msg) toast(m.ok?('✅ '+m.msg):('❌ '+m.msg)); if(!$('shop').classList.contains('hidden')){buildGrid();} }
 }
 function handleEvent(ev){
   if(ev.type==='splat') addSplat(ev.x,ev.y,ev.c);
@@ -282,13 +283,13 @@ function handleEvent(ev){
     if(ev.byId===myId && ev.rew){ toast('Splat! +'+ev.rew+' Paint Coins · +'+ev.xp+' XP'); sfx.splat(); }
     if(ev.vtId===myId) sfx.hurt(); }
   else if(ev.type==='msg') toast(ev.text);
-  else if(ev.type==='capture'){ const mine=snap&&snap.you&&ev.team===snap.you.team; showBanner((mine?'FLAG CAPTURED ':'ENEMY SCORED ')+(ev.caps?ev.caps.blue+'–'+ev.caps.red:''), mine?'#9be36a':'#ff6b6b'); sfx.level(); toast('🚩 '+ev.by+' scored for '+ev.team.toUpperCase()+'!'); }
-  else if(ev.type==='flaggrab'){ const mine=snap&&snap.you&&ev.team===snap.you.team; if(mine){ showBanner('⚠ YOUR FLAG TAKEN!','#ff6b6b'); sfx.hurt(); toast('⚠ '+ev.by+' grabbed YOUR flag — stop them!'); } else toast('🚩 '+ev.by+' grabbed the '+ev.team.toUpperCase()+' flag!'); }
+  else if(ev.type==='capture'){ const mine=snap&&snap.you&&ev.team===snap.you.team; showBanner((mine?'FLAG CAPTURED ':'ENEMY SCORED ')+(ev.caps?ev.caps.blue+'-'+ev.caps.red:''), mine?'#9be36a':'#ff6b6b'); sfx.level(); toast('🚩 '+ev.by+' scored for '+ev.team.toUpperCase()+'!'); }
+  else if(ev.type==='flaggrab'){ const mine=snap&&snap.you&&ev.team===snap.you.team; if(mine){ showBanner('⚠ YOUR FLAG TAKEN!','#ff6b6b'); sfx.hurt(); toast('⚠ '+ev.by+' grabbed YOUR flag, stop them!'); } else toast('🚩 '+ev.by+' grabbed the '+ev.team.toUpperCase()+' flag!'); }
   else if(ev.type==='flagreturn'){ toast('🚩 '+ev.team.toUpperCase()+' flag returned.'); }
-  else if(ev.type==='afk'){ if(ev.id===myId){ showBanner('SET TO SITTING OUT','#ffb84d'); toast('Inactive 2 rounds — set to Sitting Out. Press Y or click Ready to rejoin.'); } }
-  else if(ev.type==='goldenbot'){ showBanner('★ GOLDEN BOT DOWN — SUPER INVADERS! ★','#ffd700'); sfx.level(); toast('★ '+ev.by+' splatted the GOLDEN BOT — Super Bot Invaders incoming!'); }
-  else if(ev.type==='levelup'){ if(ev.id===myId){ sfx.level(); if(ev.unlocked) showBanner('CLASS UNLOCKED','#ffd166'); toast(ev.unlocked?'⭐ LEVEL 10! Class selection unlocked — open Loadout (B)':('⬆ Level '+ev.level+'!')); } }
-  else if(ev.type==='roundstart'){ splats.length=0; showBanner((ev.modeName||('ROUND '+ev.round)).toUpperCase(), ev.tournament?'#ffd166':'#9be36a'); toast('⚔ '+(ev.modeName||('Round '+ev.round))+(ev.tournament?' — TOURNAMENT':'')+' — FIGHT!'); }
+  else if(ev.type==='afk'){ if(ev.id===myId){ showBanner('SET TO SITTING OUT','#ffb84d'); toast('Inactive 2 rounds, set to Sitting Out. Press Y or click Ready to rejoin.'); } }
+  else if(ev.type==='goldenbot'){ showBanner('★ GOLDEN BOT DOWN: SUPER INVADERS! ★','#ffd700'); sfx.level(); toast('★ '+ev.by+' splatted the GOLDEN BOT. Super Bot Invaders incoming!'); }
+  else if(ev.type==='levelup'){ if(ev.id===myId){ sfx.level(); if(ev.unlocked) showBanner('CLASS UNLOCKED','#ffd166'); toast(ev.unlocked?'⭐ LEVEL 10! Class selection unlocked. Open Loadout (B)':('⬆ Level '+ev.level+'!')); } }
+  else if(ev.type==='roundstart'){ splats.length=0; showBanner((ev.modeName||('ROUND '+ev.round)).toUpperCase(), ev.tournament?'#ffd166':'#9be36a'); toast('⚔ '+(ev.modeName||('Round '+ev.round))+(ev.tournament?' · TOURNAMENT':'')+' · FIGHT!'); }
   else if(ev.type==='roundend'){ const tie=ev.winner==='tie', win=snap&&snap.you&&ev.winner===snap.you.team;
     showBanner(tie?'ROUND DRAW':(win?'ROUND WON!':'ROUND LOST'), tie?'#cdd5dd':(win?'#9be36a':'#ff6b6b'));
     if(!tie){ win?sfx.win():sfx.lose(); }
@@ -422,9 +423,11 @@ function draw(){
 }
 function drawStage(s){
   ctx.fillStyle='rgba(0,0,0,.10)'; ctx.fillRect(s.x,s.y,s.w,s.h);
-  const t=10; ctx.fillStyle='#4a3a28';
-  ctx.fillRect(s.x-t,s.y-t,s.w+2*t,t); ctx.fillRect(s.x-t,s.y+s.h,s.w+2*t,t); ctx.fillRect(s.x-t,s.y,t,s.h); ctx.fillRect(s.x+s.w,s.y,t,s.h);
-  ctx.strokeStyle='#2b2014'; ctx.lineWidth=2; ctx.strokeRect(s.x-t,s.y-t,s.w+2*t,s.h+2*t);
+  const t=(terrain&&terrain.tile)||32; const mt=(tiles['mountain']&&tiles['mountain'].length)?tiles['mountain']:null;
+  const ring=(bx,by,bw,bh)=>{ ctx.save(); ctx.beginPath(); ctx.rect(bx,by,bw,bh); ctx.clip();
+    if(mt){ for(let Y=Math.floor(by/t)*t; Y<by+bh; Y+=t) for(let X=Math.floor(bx/t)*t; X<bx+bw; X+=t) ctx.drawImage(mt[Math.abs((Math.round(X/t)*7+Math.round(Y/t)*13))%mt.length],X,Y,t,t); }
+    else { ctx.fillStyle='#5b5048'; ctx.fillRect(bx,by,bw,bh); } ctx.restore(); };
+  ring(s.x-t,s.y-t,s.w+2*t,t); ring(s.x-t,s.y+s.h,s.w+2*t,t); ring(s.x-t,s.y,t,s.h); ring(s.x+s.w,s.y,t,s.h);
   ctx.fillStyle='rgba(255,255,255,.5)'; ctx.font='bold 18px Segoe UI'; ctx.textAlign='center'; ctx.textBaseline='bottom'; ctx.fillText('STAGING AREA', s.x+s.w/2, s.y-14);
   if(s.zones) for(const z of s.zones) drawStore(ctx,z);
 }
@@ -517,18 +520,19 @@ function hud(){
   $('sBlue').textContent=s.roundsWon.blue; $('sRed').textContent=s.roundsWon.red;
   if(s.phase==='active'){ const m=Math.floor(s.roundTime/60),ss=s.roundTime%60;
     let line=`${(s.modeName||'').toUpperCase()} · ${m}:${ss<10?'0':''}${ss}`;
-    if(s.mode==='ctf'){ line+=` · BLUE ${s.caps?s.caps.blue:0} – ${s.caps?s.caps.red:0} RED (first to ${s.captureTarget||3})`;
+    if(s.mode==='ctf'){ line+=` · BLUE ${s.caps?s.caps.blue:0} - ${s.caps?s.caps.red:0} RED (first to ${s.captureTarget||3})`;
       const mt=s.you&&s.you.team, mf=(s.flags||[]).find(fl=>fl.team===mt); if(mf&&!mf.home) line+='  ⚠ YOUR FLAG IS OUT'; }
     else if(s.mode==='invaders') line+=`${s.superRound?' ⚡SUPER':''} · WAVE ${s.wave||1} · ALIVE ${s.alive.blue} vs BOTS ${s.alive.red}`;
     else line+=` · BLUE ${s.alive.blue} vs RED ${s.alive.red}`;
-    if(s.tournament) line=`🏆 TOURNAMENT Bo5 ${s.roundsWon.blue}–${s.roundsWon.red} · `+line;
+    if(s.tournament) line=`🏆 TOURNAMENT Bo5 ${s.roundsWon.blue}-${s.roundsWon.red} · `+line;
     $('phaseline').textContent=line; }
-  else $('phaseline').textContent=`NEXT ROUND IN ${s.phaseTimer}s — gear up!`;
+  else $('phaseline').textContent=`NEXT ROUND IN ${s.phaseTimer}s. Gear up!`;
   if(s.you){ const ab=$('anteBtn'); if(ab){ ab.textContent=s.you.wantAnte?'ON':'OFF'; ab.className='anteBtn '+(s.you.wantAnte?'anteOn':'anteOff'); } const aa=$('anteAmt'); if(aa) aa.textContent=s.you.anteAmt||100; const pv=$('potVal'); if(pv) pv.textContent=s.pot||0; const rb=$('btnReady'); if(rb){ const rdy=s.you.ready!==false; rb.textContent=rdy?'✓ Ready':'✕ Sitting Out'; rb.className=rdy?'':'out'; } }
   if(s.you){ const y=s.you; const dz=Math.round((y.deflect||0)*100);
     $('hpfill').style.width=dz+'%'; $('hpfill').style.background='linear-gradient(90deg,#6ad0ff,#3da9fc)';
     $('hpNum').textContent=dz+'%'; $('clsName').textContent=y.cls;
-    $('ammo').innerHTML=`AMMO ${y.ammo<0?'∞':y.ammo+' / '+y.mag}`+(y.golden?` · <span style="color:#ffd700">${y.goldenArmed?'★ARMED':(y.goldenReady?'GOLD [F]':'gold…')}</span>`:'');
+    { const rl=y.reloading, clip=(y.clip==null?(y.clipMax||0):y.clip), cm=y.clipMax||0, pool=(y.ammo<0?'∞':y.ammo);
+      $('ammo').innerHTML=`AMMO ${rl?'<span style="color:#ffb84d">⟳ RELOADING</span>':(clip+' / '+cm)} <span style="opacity:.55">· pool ${pool}</span>`+(y.golden?` · <span style="color:#ffd700">${y.goldenArmed?'★ARMED':(y.goldenReady?'GOLD [F]':'gold…')}</span>`:''); }
     let gl=''; if(y.gadget==='mine') gl=`Mines: ${y.mineCharges} <span style="color:#8aa0b3">[G]</span>`; else if(y.gadget==='turret') gl=y.hasTurret?'Turret: deployed':'Turret ready <span style="color:#8aa0b3">[G]</span>'; else if(y.gadget==='jetpack') gl='Jetpack active'; else if(y.gadget==='decoy') gl=`Decoys: ${y.mineCharges||0} <span style="color:#8aa0b3">[G]</span>`; else gl='No gadget';
     $('gadgetline').innerHTML=gl;
     $('lvNum').textContent='Lv '+y.level; $('xpfill').style.width=clamp(y.xpInto/y.xpNeed,0,1)*100+'%';
@@ -543,11 +547,11 @@ function hud(){
     const z=s.you&&s.you.zone;
     banner.innerHTML = z
       ? `<div class="small" style="margin-bottom:90px;background:rgba(8,11,16,.85);padding:9px 18px;border-radius:10px;border:1px solid #2e3d4d">Press <b style="color:#ffd166">E</b> to enter the ${z==='armory'?'Armory':'Equipment'} store</div>`
-      : `<div class="small" style="margin-bottom:90px;background:rgba(8,11,16,.7);padding:9px 18px;border-radius:10px">Between rounds — walk into a store. Next round in ${s.phaseTimer}s</div>`;
+      : `<div class="small" style="margin-bottom:90px;background:rgba(8,11,16,.7);padding:9px 18px;border-radius:10px">Between rounds, walk into a store. Next round in ${s.phaseTimer}s</div>`;
   } else if(s.phase==='active' && s.you && !s.you.alive){ banner.classList.remove('hidden'); banner.style.justifyContent='center';
     banner.innerHTML = (s.you.ready===false)
-      ? `<div class="big" style="color:#ffb84d">SITTING OUT</div><div class="small">Shop or take a break — click <b>Ready</b> (Y) to rejoin next round</div>`
-      : `<div class="big">SPECTATING</div><div class="small">WASD to look around — you're back next round</div>`;
+      ? `<div class="big" style="color:#ffb84d">SITTING OUT</div><div class="small">Shop or take a break, click <b>Ready</b> (Y) to rejoin next round</div>`
+      : `<div class="big">SPECTATING</div><div class="small">WASD to look around, you're back next round</div>`;
   } else banner.classList.add('hidden');
   if(!$('shop').classList.contains('hidden')) updateShopLive();
 }
@@ -560,7 +564,7 @@ function toggleShop(by){ if($('shop').classList.contains('hidden')) openShop(by)
 $('btnShop').onclick=()=>toggleShop('manual'); $('shopClose').onclick=closeShop;
 $('resetBtn').onclick=()=>{ if(snap&&snap.you) send({t:'resetloadout'}); };
 function setPeekBtn(){ const b=$('btnPeek'); if(b) b.classList.toggle('on',peek); }
-$('btnPeek').onclick=()=>{ peek=!peek; setPeekBtn(); toast(peek?'🔍 Pan mode ON — move mouse to look around':'Pan mode off'); };
+$('btnPeek').onclick=()=>{ peek=!peek; setPeekBtn(); toast(peek?'🔍 Pan mode ON, move mouse to look around':'Pan mode off'); };
 $('btnReady').onclick=()=>{ if(snap&&snap.you) send({t:'ready', on:!(snap.you.ready!==false)}); };
 $('chatInput').addEventListener('keydown',e=>{ e.stopPropagation(); if(e.key==='Enter'){ const v=$('chatInput').value.trim(); if(v) send({t:'chat',text:v}); $('chatInput').value=''; $('chatInput').blur(); } else if(e.key==='Escape'){ $('chatInput').value=''; $('chatInput').blur(); } });
 $('anteBtn').onclick=()=>{ if(snap&&snap.you) send({t:'ante', on:!snap.you.wantAnte, amt:snap.you.anteAmt||100}); };
@@ -577,16 +581,28 @@ function buildGrid(){
   const cap=y.weightCap||12, curW=myLoadout?ldWeight(myLoadout):0;
   if(snap.phase==='active' && activeTab!=='modes'){ const w=document.createElement('div'); w.className='item lock'; w.innerHTML='<div class="in"><span>\uD83D\uDD12 Loadout locked</span></div><div class="id">Gear changes only between rounds, in the holding area. (Mode voting still works.)</div>'; grid.appendChild(w); return; }
   if(activeTab==='class'){
+    { const CTc={2:600,3:1200,4:2000,5:3000}; const perks={Sniper:'Sharper vision: fewer blind squares up close.',Scout:'Faster movement speed.',Infiltrator:'Faster movement speed (longer invisibility coming soon).'};
+      if(perks[y.cls]){ const ct=(y.classTiers&&y.classTiers[y.cls])||y.classTier||1;
+        const el=document.createElement('div'); el.className='item eq';
+        el.innerHTML=`<div class="in"><span>⭐ ${y.cls} Class Upgrade <span style="color:#9be36a">T${ct}/5</span></span></div><div class="id">${perks[y.cls]}</div>`;
+        const row=document.createElement('div'); row.style.cssText='display:flex;gap:6px;margin-top:6px';
+        if(ct>=5){ const b=document.createElement('button'); b.textContent='Max Class Tier'; b.disabled=true; row.appendChild(b); }
+        else { const cost=CTc[ct+1], lvlReq=ct*3; const up=document.createElement('button');
+          if((y.level||1)<lvlReq){ up.textContent=`Upgrade (Lv ${lvlReq})`; up.disabled=true; }
+          else if(y.money<cost){ up.textContent=`Upgrade 💰${cost}`; up.disabled=true; }
+          else { up.textContent=`Upgrade → T${ct+1} (💰${cost})`; up.onclick=()=>send({t:'upgradeclass'}); }
+          row.appendChild(up); }
+        el.appendChild(row); grid.appendChild(el); } }
     for(const k in classesInfo){ const ci=classesInfo[k]; const req=(classUnlock&&classUnlock[k])||(k==='Trooper'?1:10); const locked=(y.level||1)<req; const cur=y.cls===k;
       const el=document.createElement('div'); el.className='item'+(cur?' eq':'')+(locked?' lock':'');
       el.innerHTML=`<div class="in"><span><span style="color:${CLS_COLORS[k]||'#fff'}">●</span> ${k}</span>${locked?`<span class="cost">Lv ${req}</span>`:''}</div><div class="id">${ci.desc||''}</div>`;
-      const b=document.createElement('button'); if(cur){ b.textContent='Selected'; b.className='equip'; b.disabled=true; } else if(locked){ b.textContent='Unlocks at Lv '+req; b.disabled=true; } else { b.textContent='Select (refunds gear)'; b.className='equip'; b.onclick=()=>send({t:'class',cls:k}); }
+      const b=document.createElement('button'); if(cur){ b.textContent='Selected'; b.className='equip'; b.disabled=true; } else if(locked){ b.textContent='Unlocks at Lv '+req; b.disabled=true; } else { b.textContent='Select'; b.className='equip'; b.onclick=()=>{ if(confirm('Switch to '+k+'? This resets your loadout.')) send({t:'class',cls:k}); }; }
       el.appendChild(b); grid.appendChild(el); }
     return;
   }
   if(activeTab==='modes'){
     const mv=(snap.you&&snap.you.modeVotes)||{}; const ms=snap.modes||{counts:{},disabled:[],players:1,list:['tdm','ctf','invaders']};
-    const head=document.createElement('div'); head.className='item'; head.innerHTML=`<div class="in"><span>Mode rotation — vote off what you don't want</span></div><div class="id">A majority voting a mode off removes it from the random rotation. (Capture the Flag also needs 2+ players.)</div>`; grid.appendChild(head);
+    const head=document.createElement('div'); head.className='item'; head.innerHTML=`<div class="in"><span>Mode rotation: vote off what you don't want</span></div><div class="id">A majority voting a mode off removes it from the random rotation. (Capture the Flag also needs 2+ players.)</div>`; grid.appendChild(head);
     for(const m of (ms.list||['tdm','ctf','invaders'])){ const off=!!mv[m]; const cnt=(ms.counts&&ms.counts[m])||0; const dis=(ms.disabled||[]).includes(m);
       const el=document.createElement('div'); el.className='item'+(dis?' lock':(off?'':' eq'));
       el.innerHTML=`<div class="in"><span>${MODE_NAMES[m]||m}${dis?' <span style="color:#ff8aa0">· OFF rotation</span>':''}</span><span class="cost">${cnt}/${ms.players} voted off</span></div><div class="id">${off?'You voted to skip this mode.':'In your rotation.'}</div>`;
@@ -640,7 +656,7 @@ function buildGrid(){
   const slots=isMod?(loadCfg?loadCfg.wmodSlots:2):(loadCfg?loadCfg.chipSlots:5);
   const list=isMod?myLoadout.wmods:myLoadout.chips; const inv=y.inv||{}; const maxCamo=(loadCfg?loadCfg.maxCamo:2);
   const head=document.createElement('div'); head.className='item';
-  head.innerHTML=`<div class="in"><span>${isMod?'Weapon Mods':'Armor Chips'} — ${list.length}/${slots} equipped</span><span class="cost" style="color:${curW>cap?'#ff6b6b':'#9be36a'}">⚖ ${curW}/${cap}</span></div><div class="id">Cost is per copy — buy one for each socket. ${list.map(x=>items[x]?items[x].name:x).join(' + ')||''}</div>`;
+  head.innerHTML=`<div class="in"><span>${isMod?'Weapon Mods':'Armor Chips'}: ${list.length}/${slots} equipped</span><span class="cost" style="color:${curW>cap?'#ff6b6b':'#9be36a'}">⚖ ${curW}/${cap}</span></div><div class="id">Cost is per copy, buy one for each socket. ${list.map(x=>items[x]?items[x].name:x).join(' + ')||''}</div>`;
   grid.appendChild(head);
   for(const id in items){ const it=items[id]; const ownedN=inv[cat+':'+id]||0; const eqN=list.filter(x=>x===id).length; const afford=y.money>=it.cost;
     const heavyBlock = it.heavy && loadCfg && loadCfg.heavyClasses && !loadCfg.heavyClasses.includes(y.cls);
@@ -671,7 +687,7 @@ function buildGrid(){
 function updateShopLive(){
   if(!snap) return;
   $('standings').innerHTML=`<span class="b">${snap.roundsWon.blue}</span><span style="font-size:14px;color:#8aa0b3">ROUNDS</span><span class="r">${snap.roundsWon.red}</span>`;
-  $('shopTitle').textContent = snap.phase==='intermission' ? 'Intermission — Gear Up' : 'Loadout';
+  $('shopTitle').textContent = snap.phase==='intermission' ? 'Intermission: Gear Up' : 'Loadout';
   $('countdown').textContent = snap.phase==='intermission' ? ('Round '+(snap.round+1)+' starts in '+snap.phaseTimer+'s') : '';
   if(snap.you){ const y=snap.you; $('shopWallet').textContent=y.money; const w=myLoadout?ldWeight(myLoadout):(y.weight||0); const cap=y.weightCap||12;
     $('shopLevel').innerHTML='Lv '+y.level+' · <span style="color:'+(w>cap?'#ff6b6b':'#9be36a')+'">⚖ '+w+'/'+cap+'</span>'+(y.classUnlocked?'':' · classes at Lv'+unlockLevel); $('potVal').textContent=snap.pot||0;

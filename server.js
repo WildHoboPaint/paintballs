@@ -173,6 +173,13 @@ class Conn {
         persist();
         break;
       }
+      case 'upgradeclass': {
+        if (this.playerId == null) return;
+        const r = game.upgradeClass(this.playerId);
+        this.send({ t:'classupresult', ...r });
+        persist();
+        break;
+      }
       case 'loadout': {
         if (this.playerId == null) return;
         const r = game.applyLoadout(this.playerId, msg.loadout || msg);
