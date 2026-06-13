@@ -152,7 +152,8 @@ class Conn {
                     obstacles:game.obstacles, classes:G.CLASSES, catalog:G.CATALOG, unlockLevel:G.CLASS_UNLOCK_LEVEL,
                     terrain:{ grid:game.grid, cols:game.tcols, rows:game.trows, tile:G.TILE },
                     lobby:{ w:G.LOBBY.w, h:G.LOBBY.h, zones:G.LOBBY_ZONES },
-                    speeds:G.SPEED_MULT, name:p.name, money:game.getMoney(p) });
+                    speeds:G.SPEED_MULT, name:p.name, money:game.getMoney(p), build:G.BUILD,
+                    loadoutCfg:{ wmodSlots:G.WMOD_SLOTS, chipSlots:G.CHIP_SLOTS, maxCamo:G.MAX_CAMO, weaponWt:G.WEAPON_WT, baseAmmo:G.BASE_AMMO, heavyClasses:G.HEAVY_CLASSES } });
         persist();
         break;
       }
@@ -165,10 +166,10 @@ class Conn {
         persist();
         break;
       }
-      case 'equip': {
+      case 'loadout': {
         if (this.playerId == null) return;
-        const r = game.equip(this.playerId, msg.item);
-        this.send({ t:'buyresult', ...r, money: game.getMoney(game.players.get(this.playerId)) });
+        const r = game.applyLoadout(this.playerId, msg.loadout || msg);
+        this.send({ t:'loadresult', ...r, money: game.getMoney(game.players.get(this.playerId)) });
         break;
       }
       case 'ante': {

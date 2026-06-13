@@ -62,11 +62,11 @@
   #btnReady{position:absolute; top:90px; right:16px; pointer-events:auto; background:rgba(8,11,16,.7); border:1px solid #2e3d4d; color:#9be36a; border-radius:8px; padding:7px 12px; font-size:13px; font-weight:700; cursor:pointer; font-family:inherit}
   #btnReady:hover{border-color:var(--accent)}
   #btnReady.out{color:#ffb84d; border-color:#7a5a1a}
-  #chat{position:absolute; left:14px; bottom:128px; width:330px; max-width:46vw; z-index:12; pointer-events:none}
-  #chatlog{display:flex; flex-direction:column; gap:3px; margin-bottom:6px; font-size:13px; font-weight:600}
-  #chatlog .cm{background:rgba(8,11,16,.55); padding:2px 8px; border-radius:6px; align-self:flex-start; max-width:100%; text-shadow:0 1px 2px #000}
-  #chatInput{pointer-events:auto; width:100%; box-sizing:border-box; background:rgba(8,11,16,.8); border:1px solid #2e3d4d; color:#dce8f2; border-radius:8px; padding:6px 10px; font-size:13px; font-weight:600; font-family:inherit; opacity:.45; transition:opacity .15s}
-  #chatInput:focus{opacity:1; border-color:var(--accent); outline:none}
+  #chat{position:absolute; left:50%; transform:translateX(-50%); bottom:14px; width:440px; max-width:80vw; z-index:12; pointer-events:none; text-align:center}
+  #chatlog{display:flex; flex-direction:column; gap:3px; margin-bottom:6px; font-size:13px; font-weight:600; align-items:center}
+  #chatlog .cm{background:rgba(8,11,16,.6); padding:2px 10px; border-radius:6px; max-width:100%; text-shadow:0 1px 2px #000}
+  #chatInput{pointer-events:auto; width:100%; box-sizing:border-box; background:rgba(8,11,16,.82); border:1px solid #2e3d4d; color:#dce8f2; border-radius:8px; padding:6px 12px; font-size:13px; font-weight:600; font-family:inherit; text-align:center; opacity:.4; transition:opacity .15s}
+  #chatInput:focus{opacity:1; border-color:var(--accent); outline:none; text-align:left}
   #elim{position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px}
   #elim .big{font-size:44px; font-weight:900; color:#ff5470; text-shadow:0 2px 12px #000}
   #elim .small{font-size:15px; color:#cdd}
@@ -194,10 +194,10 @@ addEventListener('resize',resize); resize();
 
 let ws=null, myId=null, arena={w:2000,h:1500}, obstacles=[], terrain=null, catalog=null, classesInfo=null, unlockLevel=10;
 let snap=null, view=new Map(), splats=[], feed=[], toasts=[], cam={x:0,y:0}, connected=false;
-let ter=null, terMini=null; const keys={}, mouse={x:0,y:0,down:false}; let reloadFlag=false, deployFlag=false;
-let shopOpenedBy=null, activeTab='class';
+let ter=null, terMini=null; const keys={}, mouse={x:0,y:0,down:false}; let reloadFlag=false, deployFlag=false, goldenFlag=false;
+let shopOpenedBy=null, activeTab='class', myLoadout=null, loadCfg=null;
 let lobby=null, lobbyCanvas=null, freeCam={x:0,y:0}, storeCats=null;
-let actx=null, muted=false, prevAmmo=null, bannerT=null; let peek=false; let myPos=null; let chat=[];
+let actx=null, muted=false, prevAmmo=null, bannerT=null; let peek=false; let myPos=null; let chat=[]; const CLIENT_BUILD='hvpb-2026.06.14.1';
 function aud(){ if(!actx){ try{ actx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } return actx; }
 function blip(type,freq,dur,vol,ramp){ if(muted) return; const a=aud(); if(!a) return; try{ const o=a.createOscillator(),g=a.createGain(); o.type=type; o.frequency.value=freq; if(ramp) o.frequency.exponentialRampToValueAtTime(Math.max(30,freq+ramp),a.currentTime+dur); g.gain.value=vol; g.gain.exponentialRampToValueAtTime(0.0001,a.currentTime+dur); o.connect(g); g.connect(a.destination); o.start(); o.stop(a.currentTime+dur); }catch(e){} }
 const sfx={
@@ -212,7 +212,7 @@ const sfx={
 function showBanner(text,color){ const b=$('rbanner'); b.textContent=text; b.style.color=color; b.classList.remove('hidden'); clearTimeout(bannerT); bannerT=setTimeout(()=>b.classList.add('hidden'),3000); }
 function addSplashBlob(x,y,r,c){ for(let i=0;i<10;i++){ const a=Math.random()*6.28,d=Math.random()*r*0.8; splats.push({x:x+Math.cos(a)*d,y:y+Math.sin(a)*d,r:r*(0.25+Math.random()*0.25),c,al:.4+Math.random()*0.25}); } if(splats.length>1200) splats.splice(0,splats.length-1200); }
 const TC=['#2f6b32','#1d4a22','#245f7e','#6f6657'];
-const TAB_LABELS={class:'Class',weapon:'Weapon',armor:'Armor',vision:'Vision',camo:'Camo',gadget:'Gadget',ammo:'Ammo'};
+const TAB_LABELS={class:'Class',weapon:'Weapon',mods:'Weapon Mods',armor:'Armor Chips',gadget:'Gadget'};
 const CLS_COLORS={Trooper:'#cbd5e1',VetTrooper:'#7dd3fc',HeavyWeapons:'#ff8c42',Scout:'#9b5de5',Infiltrator:'#06d6a0',Sniper:'#ef476f',Engineer:'#ffd166',Officer:'#3da9fc'};
 
 addEventListener('keydown',e=>{ if(e.target && (e.target.id==='chatInput'||e.target.id==='nameIn'||e.target.id==='passIn')) return; const k=e.key.toLowerCase(); keys[k]=true;
@@ -223,6 +223,7 @@ addEventListener('keydown',e=>{ if(e.target && (e.target.id==='chatInput'||e.tar
   if(k==='m'){ muted=!muted; toast(muted?'🔇 sound off':'🔊 sound on'); }
   if(connected && (k==='tab'||k==='v')){ peek=!peek; setPeekBtn(); toast(peek?'🔍 Pan mode ON — move mouse to look around':'Pan mode off'); }
   if(connected && k==='y' && snap && snap.you){ send({t:'ready', on:!(snap.you.ready!==false)}); }
+  if(connected && k==='f' && snap && snap.you && snap.you.golden){ goldenFlag=true; }
   if([' ','arrowup','arrowdown','arrowleft','arrowright','tab'].includes(k)) e.preventDefault(); });
 addEventListener('keyup',e=>{ keys[e.key.toLowerCase()]=false; });
 cv.addEventListener('mousemove',e=>{ const r=cv.getBoundingClientRect(); mouse.x=(e.clientX-r.left)*(cv.width/r.width); mouse.y=(e.clientY-r.top)*(cv.height/r.height); });
@@ -231,6 +232,7 @@ cv.addEventListener('mousedown',()=>mouse.down=true); addEventListener('mouseup'
 (function(){ let d; if(location.protocol==='file:') d='ws://localhost:3000'; else d=(location.protocol==='https:'?'wss://':'ws://')+location.host; $('serverIn').value=d; })();
 
 $('loginBtn').onclick=()=>connect(false); $('regBtn').onclick=()=>connect(true);
+;(function(){ const d=document.createElement('div'); d.id='ver'; d.style.cssText='position:fixed;right:8px;bottom:6px;font:600 11px Segoe UI,sans-serif;color:#5b6b7a;z-index:50;pointer-events:none'; d.textContent='build '+CLIENT_BUILD; document.body.appendChild(d); })();
 $('nameIn').addEventListener('keydown',e=>{ if(e.key==='Enter') $('passIn').focus(); });
 $('passIn').addEventListener('keydown',e=>{ if(e.key==='Enter') connect(false); });
 $('advToggle').onclick=()=>$('advRow').classList.toggle('hidden');
@@ -253,18 +255,20 @@ function esc(s){ return (''+s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>'
 function isTyping(){ const a=document.activeElement; return !!(a && a.id==='chatInput'); }
 
 function onMsg(m){
-  if(m.t==='welcome'){ myId=m.id; arena=m.arena; obstacles=m.obstacles||[]; terrain=m.terrain; catalog=m.catalog; classesInfo=m.classes; unlockLevel=m.unlockLevel||10; lobby=m.lobby||null;
-    connected=true; $('menu').classList.add('hidden'); $('hud').classList.remove('hidden'); mm.width=180; mm.height=Math.round(180*arena.h/arena.w); prerenderTerrain(); loadSprites(); loadTiles(); }
+  if(m.t==='welcome'){ myId=m.id; arena=m.arena; obstacles=m.obstacles||[]; terrain=m.terrain; catalog=m.catalog; classesInfo=m.classes; unlockLevel=m.unlockLevel||10; lobby=m.lobby||null; loadCfg=m.loadoutCfg||null;
+    connected=true; $('menu').classList.add('hidden'); $('hud').classList.remove('hidden'); mm.width=180; mm.height=Math.round(180*arena.h/arena.w); prerenderTerrain(); loadSprites(); loadTiles();
+    { const vd=$('ver'); if(vd){ if(m.build&&m.build!==CLIENT_BUILD){ vd.textContent='⚠ client '+CLIENT_BUILD+' ≠ server '+m.build; vd.style.color='#ffb84d'; } else { vd.textContent='build '+CLIENT_BUILD+' ✓ live'; vd.style.color='#5b8c5b'; } } } }
   else if(m.t==='map'){ arena=m.arena; terrain=m.terrain; mm.height=Math.round(180*arena.h/arena.w); prerenderTerrain(); }
   else if(m.t==='state'){ snap=m;
-    if(m.you){ if(prevAmmo!=null && m.you.alive && m.you.ammo<prevAmmo) sfx.shoot(); prevAmmo=m.you.ammo;
+    if(m.you){ if(prevAmmo!=null && prevAmmo>=0 && m.you.alive && m.you.ammo>=0 && m.you.ammo<prevAmmo) sfx.shoot(); prevAmmo=m.you.ammo;
       if(!myPos || !m.you.alive || m.phase!=='active'){ myPos={x:m.you.x,y:m.you.y}; }
       else { const dx=m.you.x-myPos.x, dy=m.you.y-myPos.y, d=Math.hypot(dx,dy); if(d>120){ myPos.x=m.you.x; myPos.y=m.you.y; } else { myPos.x+=dx*0.2; myPos.y+=dy*0.2; } } }
     if(m.events) for(const ev of m.events) handleEvent(ev); }
   else if(m.t==='authfail'){ $('status').textContent='⚠ '+(m.msg||'Login failed'); try{ws.close();}catch(e){} connected=false; }
   else if(m.t==='chat'){ chat.push({from:m.from,team:m.team,text:m.text,t:14}); if(chat.length>10) chat.shift(); }
-  else if(m.t==='buyresult'){ if(m.money!=null) $('shopWallet').textContent=m.money; if(m.msg) toast(m.ok?('✅ '+m.msg):('❌ '+m.msg)); buildGrid(); }
-  else if(m.t==='classresult'){ if(!m.ok && m.msg) toast('❌ '+m.msg); buildGrid(); }
+  else if(m.t==='buyresult'){ if(m.money!=null) $('shopWallet').textContent=m.money; if(m.owned&&snap&&snap.you) snap.you.owned=m.owned; if(m.msg) toast(m.ok?('✅ '+m.msg):('❌ '+m.msg)); if(!$('shop').classList.contains('hidden')){buildTabs();buildGrid();} }
+  else if(m.t==='loadresult'){ if(m.money!=null) $('shopWallet').textContent=m.money; if(!m.ok){ toast('❌ '+(m.msg||'invalid loadout')); syncLoadout(); } if(!$('shop').classList.contains('hidden')){buildTabs();buildGrid();updateShopLive();} }
+  else if(m.t==='classresult'){ if(!m.ok && m.msg) toast('❌ '+m.msg); syncLoadout(); if(!$('shop').classList.contains('hidden')){buildTabs();buildGrid();} }
 }
 function handleEvent(ev){
   if(ev.type==='splat') addSplat(ev.x,ev.y,ev.c);
@@ -278,6 +282,7 @@ function handleEvent(ev){
   else if(ev.type==='flaggrab'){ const mine=snap&&snap.you&&ev.team===snap.you.team; if(mine){ showBanner('⚠ YOUR FLAG TAKEN!','#ff6b6b'); sfx.hurt(); toast('⚠ '+ev.by+' grabbed YOUR flag — stop them!'); } else toast('🚩 '+ev.by+' grabbed the '+ev.team.toUpperCase()+' flag!'); }
   else if(ev.type==='flagreturn'){ toast('🚩 '+ev.team.toUpperCase()+' flag returned.'); }
   else if(ev.type==='afk'){ if(ev.id===myId){ showBanner('SET TO SITTING OUT','#ffb84d'); toast('Inactive 2 rounds — set to Sitting Out. Press Y or click Ready to rejoin.'); } }
+  else if(ev.type==='goldenbot'){ showBanner('★ GOLDEN BOT DOWN — SUPER INVADERS! ★','#ffd700'); sfx.level(); toast('★ '+ev.by+' splatted the GOLDEN BOT — Super Bot Invaders incoming!'); }
   else if(ev.type==='levelup'){ if(ev.id===myId){ sfx.level(); if(ev.unlocked) showBanner('CLASS UNLOCKED','#ffd166'); toast(ev.unlocked?'⭐ LEVEL 10! Class selection unlocked — open Loadout (B)':('⬆ Level '+ev.level+'!')); } }
   else if(ev.type==='roundstart'){ splats.length=0; showBanner((ev.modeName||('ROUND '+ev.round)).toUpperCase(), ev.tournament?'#ffd166':'#9be36a'); toast('⚔ '+(ev.modeName||('Round '+ev.round))+(ev.tournament?' — TOURNAMENT':'')+' — FIGHT!'); }
   else if(ev.type==='roundend'){ const tie=ev.winner==='tie', win=snap&&snap.you&&ev.winner===snap.you.team;
@@ -358,7 +363,7 @@ setInterval(()=>{
   const wx=cam.x+mouse.x/ZOOM, wy=cam.y+mouse.y/ZOOM; const aim=Math.atan2(wy-apy, wx-apx);
   const aimDist=Math.hypot(wx-apx, wy-apy);   // shoot only as far as you aim
   const canFight = snap.phase==='active' && !overlay;
-  send({t:'input',mx,my,aim,aimDist,fire:mouse.down&&canFight,reload:reloadFlag,deploy:deployFlag&&canFight}); reloadFlag=false; deployFlag=false;
+  send({t:'input',mx,my,aim,aimDist,fire:mouse.down&&canFight,reload:reloadFlag,deploy:deployFlag&&canFight,armGolden:goldenFlag}); reloadFlag=false; deployFlag=false; goldenFlag=false;
 },33);
 
 let lastT=performance.now();
@@ -467,10 +472,13 @@ function drawFighter(v){
     if(Math.cos(v.a)<0) ctx.scale(-1,1);            // face left when aiming left, else right — no mouse-spin
     ctx.drawImage(spr,-hh,-hh,S,S);
     ctx.restore();
+    if(f.gold){ ctx.strokeStyle='#ffd700'; ctx.lineWidth=3; ctx.beginPath(); ctx.arc(v.x,v.y,hh+4,0,7); ctx.stroke(); }
+    if(f.sh){ ctx.strokeStyle='#7fefff'; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(v.x,v.y,hh+6,0,7); ctx.stroke(); }
+    if(f.fast){ ctx.strokeStyle='rgba(255,140,40,.85)'; ctx.lineWidth=2.5; ctx.beginPath(); ctx.arc(v.x,v.y,hh+2,0.5,2.3); ctx.stroke(); }
     ctx.fillStyle=col; ctx.beginPath(); ctx.moveTo(v.x,v.y-hh-9); ctx.lineTo(v.x-5,v.y-hh-1); ctx.lineTo(v.x+5,v.y-hh-1); ctx.closePath(); ctx.fill();
     if(me){ ctx.lineWidth=1.5; ctx.strokeStyle='#fff'; ctx.stroke(); }
     if(f.cam){ ctx.strokeStyle='rgba(180,255,180,.6)'; ctx.lineWidth=1.5; ctx.setLineDash([4,3]); ctx.strokeRect(v.x-hh-3,v.y-hh-3,S+6,S+6); ctx.setLineDash([]); }
-    ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillStyle=me?'#fff':'rgba(255,255,255,.72)'; ctx.font=(me?'bold ':'')+'10px Segoe UI'; ctx.fillText(me?'YOU':(f.n+(f.bot?' ·bot':'')),v.x,v.y-hh-13);
+    ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillStyle=f.gold?'#ffd700':(me?'#fff':'rgba(255,255,255,.72)'); ctx.font=((me||f.gold)?'bold ':'')+'10px Segoe UI'; ctx.fillText(f.gold?'★ GOLD BOT':(me?'YOU':(f.n+(f.bot?' ·bot':''))),v.x,v.y-hh-13);
     return;
   }
   if(f.jet){ ctx.save(); ctx.translate(v.x,v.y); ctx.rotate(v.a); ctx.fillStyle='rgba(255,180,80,.7)'; ctx.beginPath(); ctx.arc(-r-4,0,5,0,7); ctx.fill(); ctx.restore(); }
@@ -507,7 +515,7 @@ function hud(){
     let line=`${(s.modeName||'').toUpperCase()} · ${m}:${ss<10?'0':''}${ss}`;
     if(s.mode==='ctf'){ line+=` · BLUE ${s.caps?s.caps.blue:0} – ${s.caps?s.caps.red:0} RED (first to ${s.captureTarget||3})`;
       const mt=s.you&&s.you.team, mf=(s.flags||[]).find(fl=>fl.team===mt); if(mf&&!mf.home) line+='  ⚠ YOUR FLAG IS OUT'; }
-    else if(s.mode==='invaders') line+=` · YOU ${s.alive.blue} vs BOTS ${s.alive.red}`;
+    else if(s.mode==='invaders') line+=`${s.superRound?' ⚡SUPER':''} · WAVE ${s.wave||1} · ALIVE ${s.alive.blue} vs BOTS ${s.alive.red}`;
     else line+=` · BLUE ${s.alive.blue} vs RED ${s.alive.red}`;
     if(s.tournament) line=`🏆 TOURNAMENT Bo5 ${s.roundsWon.blue}–${s.roundsWon.red} · `+line;
     $('phaseline').textContent=line; }
@@ -516,7 +524,7 @@ function hud(){
   if(s.you){ const y=s.you; const dz=Math.round((y.deflect||0)*100);
     $('hpfill').style.width=dz+'%'; $('hpfill').style.background='linear-gradient(90deg,#6ad0ff,#3da9fc)';
     $('hpNum').textContent=dz+'%'; $('clsName').textContent=y.cls;
-    $('ammo').innerHTML=y.reloading?'<span style="color:var(--accent)">RELOADING…</span>':`AMMO ${y.ammo} / ${y.mag} <span style="color:#8aa0b3">[R]</span>`;
+    $('ammo').innerHTML=`AMMO ${y.ammo<0?'∞':y.ammo+' / '+y.mag}`+(y.golden?` · <span style="color:#ffd700">${y.goldenArmed?'★ARMED':(y.goldenReady?'GOLD [F]':'gold…')}</span>`:'');
     let gl=''; if(y.gadget==='mine') gl=`Mines: ${y.mineCharges} <span style="color:#8aa0b3">[G]</span>`; else if(y.gadget==='turret') gl=y.hasTurret?'Turret: deployed':'Turret ready <span style="color:#8aa0b3">[G]</span>'; else if(y.gadget==='jetpack') gl='Jetpack active'; else if(y.gadget==='decoy') gl=`Decoys: ${y.mineCharges||0} <span style="color:#8aa0b3">[G]</span>`; else gl='No gadget';
     $('gadgetline').innerHTML=gl;
     $('lvNum').textContent='Lv '+y.level; $('xpfill').style.width=clamp(y.xpInto/y.xpNeed,0,1)*100+'%';
@@ -541,8 +549,8 @@ function hud(){
 }
 function decay(dt){ for(let i=feed.length-1;i>=0;i--){feed[i].t-=dt; if(feed[i].t<=0)feed.splice(i,1);} for(let i=toasts.length-1;i>=0;i--){toasts[i].t-=dt; if(toasts[i].t<=0)toasts.splice(i,1);} for(let i=chat.length-1;i>=0;i--){chat[i].t-=dt; if(chat[i].t<=0)chat.splice(i,1);} }
 
-function openShop(by){ shopOpenedBy=by; storeCats=null; activeTab='class'; $('shop').classList.remove('hidden'); buildTabs(); buildGrid(); }
-function openStore(zoneId){ storeCats = zoneId==='armory' ? ['weapon','ammo'] : ['armor','vision','camo','gadget','class']; activeTab=storeCats[0]; shopOpenedBy='zone'; $('shop').classList.remove('hidden'); buildTabs(); buildGrid(); updateShopLive(); }
+function openShop(by){ shopOpenedBy=by; storeCats=null; activeTab='class'; syncLoadout(); $('shop').classList.remove('hidden'); buildTabs(); buildGrid(); }
+function openStore(zoneId){ storeCats = zoneId==='armory' ? ['weapon','mods'] : ['armor','gadget','class']; activeTab=storeCats[0]; shopOpenedBy='zone'; syncLoadout(); $('shop').classList.remove('hidden'); buildTabs(); buildGrid(); updateShopLive(); }
 function closeShop(){ shopOpenedBy=null; $('shop').classList.add('hidden'); }
 function toggleShop(by){ if($('shop').classList.contains('hidden')) openShop(by); else closeShop(); }
 $('btnShop').onclick=()=>toggleShop('manual'); $('shopClose').onclick=closeShop;
@@ -552,11 +560,16 @@ $('btnReady').onclick=()=>{ if(snap&&snap.you) send({t:'ready', on:!(snap.you.re
 $('chatInput').addEventListener('keydown',e=>{ e.stopPropagation(); if(e.key==='Enter'){ const v=$('chatInput').value.trim(); if(v) send({t:'chat',text:v}); $('chatInput').value=''; $('chatInput').blur(); } else if(e.key==='Escape'){ $('chatInput').value=''; $('chatInput').blur(); } });
 $('anteBtn').onclick=()=>{ if(snap&&snap.you) send({t:'ante', on:!snap.you.wantAnte, amt:snap.you.anteAmt||100}); };
 $('anteAmt').onclick=()=>{ if(!snap||!snap.you) return; const opts=snap.anteOptions||[100,500,1000]; const cur=snap.you.anteAmt||opts[0]; const next=opts[(opts.indexOf(cur)+1)%opts.length]; send({t:'ante', on:snap.you.wantAnte, amt:next}); };
-function buildTabs(){ const t=$('tabs'); t.innerHTML=''; const cats=storeCats||['class','weapon','armor','vision','camo','gadget','ammo'];
-  for(const cat of cats){ const b=document.createElement('button'); b.className=(cat===activeTab?'sel':''); b.textContent=TAB_LABELS[cat]; b.onclick=()=>{ activeTab=cat; buildTabs(); buildGrid(); }; t.appendChild(b); }
+function ldWeight(ld){ let w=(loadCfg?loadCfg.weaponWt:4); for(const m of ld.wmods){ if(catalog.wmod[m]) w+=catalog.wmod[m].wt||0; } for(const c of ld.chips){ if(catalog.chip[c]) w+=catalog.chip[c].wt||0; } return w; }
+function syncLoadout(){ const y=snap&&snap.you; if(!y||!y.equip) return; myLoadout={weapon:y.equip.weapon, wmods:(y.equip.wmods||[]).slice(), chips:(y.equip.chips||[]).slice(), gadget:y.equip.gadget||'none'}; }
+function sendLoadout(){ if(myLoadout) send({t:'loadout', weapon:myLoadout.weapon, wmods:myLoadout.wmods, chips:myLoadout.chips, gadget:myLoadout.gadget}); }
+function ownsIt(cat,id){ const y=snap.you; const it=catalog[cat]&&catalog[cat][id]; if(it&&it.cost===0) return true; if(cat==='weapon'&&(classesInfo[y.cls]||{}).defWeapon===id) return true; return (y.owned||[]).includes(cat+':'+id); }
+function buildTabs(){ const t=$('tabs'); t.innerHTML=''; const cats=storeCats||['class','weapon','mods','armor','gadget'];
+  for(const cat of cats){ const b=document.createElement('button'); b.className=(cat===activeTab?'sel':''); b.textContent=TAB_LABELS[cat]||cat; b.onclick=()=>{ activeTab=cat; buildTabs(); buildGrid(); }; t.appendChild(b); }
   const ab=document.querySelector('.antebox'); if(ab) ab.style.display=(!storeCats||storeCats.includes('class'))?'flex':'none'; }
 function buildGrid(){
-  if(!snap||!snap.you||!catalog) return; const y=snap.you; const grid=$('grid'); grid.innerHTML='';
+  if(!snap||!snap.you||!catalog) return; const y=snap.you; if(!myLoadout) syncLoadout(); const grid=$('grid'); grid.innerHTML='';
+  const cap=y.weightCap||12, curW=myLoadout?ldWeight(myLoadout):0;
   if(activeTab==='class'){
     for(const k in classesInfo){ const ci=classesInfo[k]; const locked=(k!=='Trooper'&&!y.classUnlocked); const cur=y.cls===k;
       const el=document.createElement('div'); el.className='item'+(cur?' eq':'')+(locked?' lock':'');
@@ -565,20 +578,48 @@ function buildGrid(){
       el.appendChild(b); grid.appendChild(el); }
     return;
   }
-  const cat=activeTab, items=catalog[cat]; const owned=y.owned||[]; const clsInfo=classesInfo[y.cls]||{weapons:[],gear:[]};
-  for(const id in items){ const it=items[id];
-    const classAllowed = cat==='weapon' ? clsInfo.weapons.includes(id) : (cat==='gadget' ? (id==='none'||clsInfo.gear.includes(id)) : true);
-    const isOwned = it.cost===0 || owned.includes(cat+':'+id) || (cat==='weapon'&&clsInfo.defWeapon===id);
-    const equipped = y.equip[cat]===id; const afford=y.money>=it.cost;
-    const el=document.createElement('div'); el.className='item'+(equipped?' eq':'')+(!classAllowed?' lock':'');
-    el.innerHTML=`<div class="in"><span>${it.name}</span>${it.cost>0?`<span class="cost">💰 ${it.cost}</span>`:'<span class="cost">free</span>'}</div><div class="id">${it.desc||''}</div>`;
-    const b=document.createElement('button');
-    if(!classAllowed){ b.textContent='N/A for '+y.cls; b.disabled=true; }
-    else if(equipped){ b.textContent='Equipped ✓'; b.className='equip'; b.disabled=true; }
-    else if(isOwned){ b.textContent='Equip'; b.className='equip'; b.onclick=()=>send({t:'equip',item:cat+':'+id}); }
-    else if(afford){ b.textContent='Buy'; b.onclick=()=>send({t:'buy',item:cat+':'+id}); }
-    else { b.textContent='Need 💰'+it.cost; b.disabled=true; }
-    el.appendChild(b); grid.appendChild(el);
+  if(activeTab==='weapon' || activeTab==='gadget'){
+    const cat=activeTab, items=catalog[cat], ci=classesInfo[y.cls]||{weapons:[],gear:[]};
+    for(const id in items){ const it=items[id];
+      const allowed = cat==='weapon' ? ci.weapons.includes(id) : (id==='none'||ci.gear.includes(id));
+      const owned=ownsIt(cat,id); const sel=myLoadout[cat]===id; const afford=y.money>=it.cost;
+      const el=document.createElement('div'); el.className='item'+(sel?' eq':'')+(!allowed?' lock':'');
+      el.innerHTML=`<div class="in"><span>${it.name}</span>${it.cost>0?`<span class="cost">💰 ${it.cost}</span>`:'<span class="cost">free</span>'}</div><div class="id">${it.desc||''}</div>`;
+      const b=document.createElement('button');
+      if(!allowed){ b.textContent='N/A for '+y.cls; b.disabled=true; }
+      else if(sel){ b.textContent='Selected ✓'; b.className='equip'; b.disabled=true; }
+      else if(owned){ b.textContent='Select'; b.className='equip'; b.onclick=()=>{ myLoadout[cat]=id; sendLoadout(); buildGrid(); }; }
+      else if(afford){ b.textContent='Buy'; b.onclick=()=>send({t:'buy',item:cat+':'+id}); }
+      else { b.textContent='Need 💰'+it.cost; b.disabled=true; }
+      el.appendChild(b); grid.appendChild(el);
+    }
+    return;
+  }
+  // mods / armor chips — socketed, weight-limited
+  const isMod=activeTab==='mods', cat=isMod?'wmod':'chip', items=catalog[cat];
+  const slots=isMod?(loadCfg?loadCfg.wmodSlots:2):(loadCfg?loadCfg.chipSlots:5);
+  const list=isMod?myLoadout.wmods:myLoadout.chips;
+  const head=document.createElement('div'); head.className='item';
+  head.innerHTML=`<div class="in"><span>${isMod?'Weapon Mods':'Armor Chips'} — ${list.length}/${slots} slots</span><span class="cost" style="color:${curW>cap?'#ff6b6b':'#9be36a'}">⚖ ${curW}/${cap}</span></div><div class="id">${list.map(x=>items[x]?items[x].name:x).join(' + ')||'(empty — add below)'}</div>`;
+  grid.appendChild(head);
+  for(const id in items){ const it=items[id]; const owned=ownsIt(cat,id); const count=list.filter(x=>x===id).length; const afford=y.money>=it.cost;
+    const heavyBlock = it.heavy && loadCfg && loadCfg.heavyClasses && !loadCfg.heavyClasses.includes(y.cls);
+    const el=document.createElement('div'); el.className='item'+(count>0?' eq':'')+(heavyBlock?' lock':'');
+    el.innerHTML=`<div class="in"><span>${it.name}${count>0?` <span style="color:#9be36a">×${count}</span>`:''}</span>${it.cost>0?`<span class="cost">💰 ${it.cost}</span>`:''}</div><div class="id">${it.desc||''} · wt ${it.wt}</div>`;
+    const row=document.createElement('div'); row.style.cssText='display:flex;gap:6px;margin-top:6px;flex-wrap:wrap';
+    if(heavyBlock){ const b=document.createElement('button'); b.textContent='Vet / Heavy / Officer only'; b.disabled=true; row.appendChild(b); }
+    else if(!owned){ const b=document.createElement('button'); if(afford){ b.textContent='Buy 💰'+it.cost; b.onclick=()=>send({t:'buy',item:cat+':'+id}); } else { b.textContent='Need 💰'+it.cost; b.disabled=true; } row.appendChild(b); }
+    else {
+      const add=document.createElement('button'); add.className='equip';
+      const camoOK = !it.camo || (list.filter(x=>items[x]&&items[x].camo).length < (loadCfg?loadCfg.maxCamo:2));
+      if(list.length>=slots){ add.textContent='Slots full'; add.disabled=true; }
+      else if(!camoOK){ add.textContent='Max camo'; add.disabled=true; }
+      else if(curW+(it.wt||0)>cap){ add.textContent='Too heavy'; add.disabled=true; }
+      else { add.textContent='+ Add'; add.onclick=()=>{ list.push(id); sendLoadout(); buildGrid(); }; }
+      row.appendChild(add);
+      if(count>0){ const rm=document.createElement('button'); rm.textContent='− Remove'; rm.onclick=()=>{ const i=list.lastIndexOf(id); if(i>=0) list.splice(i,1); sendLoadout(); buildGrid(); }; row.appendChild(rm); }
+    }
+    el.appendChild(row); grid.appendChild(el);
   }
 }
 function updateShopLive(){
@@ -586,8 +627,9 @@ function updateShopLive(){
   $('standings').innerHTML=`<span class="b">${snap.roundsWon.blue}</span><span style="font-size:14px;color:#8aa0b3">ROUNDS</span><span class="r">${snap.roundsWon.red}</span>`;
   $('shopTitle').textContent = snap.phase==='intermission' ? 'Intermission — Gear Up' : 'Loadout';
   $('countdown').textContent = snap.phase==='intermission' ? ('Round '+(snap.round+1)+' starts in '+snap.phaseTimer+'s') : '';
-  if(snap.you){ $('shopWallet').textContent=snap.you.money; $('shopLevel').textContent='Lv '+snap.you.level+(snap.you.classUnlocked?'':' · classes at Lv'+unlockLevel); $('potVal').textContent=snap.pot||0;
-    const ab=$('anteBtn'); if(snap.you.wantAnte){ ab.textContent='ON'; ab.className='anteBtn anteOn'; } else { ab.textContent='OFF'; ab.className='anteBtn anteOff'; } }
+  if(snap.you){ const y=snap.you; $('shopWallet').textContent=y.money; const w=myLoadout?ldWeight(myLoadout):(y.weight||0); const cap=y.weightCap||12;
+    $('shopLevel').innerHTML='Lv '+y.level+' · <span style="color:'+(w>cap?'#ff6b6b':'#9be36a')+'">⚖ '+w+'/'+cap+'</span>'+(y.classUnlocked?'':' · classes at Lv'+unlockLevel); $('potVal').textContent=snap.pot||0;
+    const ab=$('anteBtn'); if(y.wantAnte){ ab.textContent='ON'; ab.className='anteBtn anteOn'; } else { ab.textContent='OFF'; ab.className='anteBtn anteOff'; } }
 }
 </script>
 </body>

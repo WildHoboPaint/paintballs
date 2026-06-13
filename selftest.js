@@ -38,10 +38,10 @@ g.phaseTimer=0.001; g.step(0.01);                  // start a round
 ok('round started (active)', g.phase==='active');
 ok('snapshot now arena space', g.snapshot(aId,[]).space==='arena');
 const foe = [...g.players.values(),...g.bots].find(f=>f.team!==A.team && f.alive);
-foe.equip.armor='none'; foe.alive=true;
+foe.equip={weapon:foe.equip.weapon,wmods:[],chips:[],gadget:'none'}; foe.alive=true;
 g.applyDamage(foe,1,A,false);
 ok('one unarmored hit eliminates', foe.alive===false);
-ok('heavy armor = 55% bounce chance', Math.abs(g.deflectChance({equip:{armor:'heavy'}})-0.55)<1e-9);
+ok('plating stacks bounce (2x light = 16%)', Math.abs(g.deflectChance({equip:{chips:['light_plate','light_plate']}})-0.16)<1e-9);
 
 console.log('\n[progression]');
 ok('level 1 at 0 XP', levelInfo(0).level===1);
@@ -51,8 +51,11 @@ console.log('\n[tuning]');
 ok('terrain tiles are small (<=36px)', G.TILE<=36);
 ok('basic gun range is short (<=300)', G.WEAPONS.pball_gun.range<=300);
 ok('rifle out-ranges the basic gun', G.WEAPONS.pball_rifle.range>G.WEAPONS.pball_gun.range);
-ok('paintballs slowed (<=500)', G.AMMO.normal.speed<=500);
-ok('paintballs much slower now (<=240)', G.AMMO.normal.speed<=240);
+ok('default round ammo pool = 30', G.BASE_AMMO===30);
+ok('Magazine mod adds +30 ammo', G.WEAPON_MODS.magazine.ammo===30);
+ok('Golden Gun mod exists', !!G.WEAPON_MODS.golden && !!G.WEAPON_MODS.golden.golden);
+ok('Heavy Plating is very heavy (>=8)', G.ARMOR_CHIPS.heavy_plate.wt>=8);
+ok('weight capacity grows with level', G.weightCapacity(25) > G.weightCapacity(1));
 ok('grenade launcher exists with splash', !!(G.WEAPONS.grenade_launcher && G.WEAPONS.grenade_launcher.splash>=40));
 ok('rocket launcher has big splash', G.WEAPONS.bazooka.splash>=90);
 ok('bots respect terrain (clearShot present)', typeof g.clearShot==='function');

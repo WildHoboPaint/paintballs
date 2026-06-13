@@ -28,16 +28,24 @@ const LOBBY_ZONES = [
 const LOBBY_SPEED = 120;
 
 // economy / rounds
-const NEW_WALLET=300, SPLAT_REWARD=15, ROUND_WIN_BONUS=120, SURVIVOR_BONUS=60;
+const NEW_WALLET=200, SPLAT_REWARD=10, BOT_SPLAT_REWARD=5, ROUND_WIN_BONUS=60, SURVIVOR_BONUS=25;
 const BUY_IN=100, SHOP_TIME=25, ROUND_TIME=120, TEAM_SIZE=5;
 const MODES=['tdm','ctf','invaders'];                 // casual rounds pick one at random
 const MODE_NAMES={tdm:'Team Deathmatch', ctf:'Capture the Flag', invaders:'Bot Invaders', tournament:'Tournament'};
-const BOTS_PER_PLAYER=6;                               // Bot Invaders swarm size
+const BOTS_PER_PLAYER=6;                               // Bot Invaders base swarm/wave
+const INV_STEP=2;                                      // +bots per player each survived wave
+const GOLD_BOT_CHANCE=0.02;                            // chance a TDM/CTF bot is Golden
+const SUPER_BOTS_PER_PLAYER=10;                        // Super Bot Invaders (golden trigger)
+const FAST_SPD_MUL=1.6;                                // fast bot speed multiplier
 const BOT_BONUS=10;                                    // coins per bot splatted (invaders survival reward)
 const CAPTURE_TARGET=3;                                // CTF captures to win
 const TOURNEY_WINS=3;                                  // best of 5
 const ANTE_OPTIONS=[100,500,1000];                    // selectable buy-in amounts
-const LEVELUP_BONUS=40;                 // coins per level gained
+const WMOD_SLOTS=2, CHIP_SLOTS=5, MAX_CAMO=2, BASE_AMMO=30, WEAPON_WT=4, BALL_SPEED=150, GOLDEN_CD=2.0;
+const HEAVY_CLASSES=['VetTrooper','HeavyWeapons','Officer'];
+function weightCapacity(level){ return 12 + Math.floor(level/5)*3; }
+const LEVELUP_BONUS=20;                 // coins per level gained
+const BUILD='hvpb-2026.06.14.1';        // bump on each change; shown in-game to verify deploys
 
 // progression
 const CLASS_UNLOCK_LEVEL=10, LVL_BASE=2, LVL_STEP=1;   // splats to go L->L+1 = LVL_BASE+(L-1)*LVL_STEP
@@ -84,30 +92,27 @@ const WEAPONS = {
   assault_rifle:{ name:"Assault Rifle",    cost:1000, dmg:1, fireRate:260, spread:0.06, mag:24, range:380, reload:1.9, proj:1, desc:"Rapid fire, medium range." },
   sniper_rifle: { name:"Sniper Rifle",     cost:1200, dmg:1, fireRate:1300,spread:0.004,mag:5,  range:780, reload:2.0, proj:1, scope:true, desc:"Long-range specialist, very slow." },
   minigun:      { name:"Minigun",          cost:1500, dmg:1, fireRate:130, spread:0.12, mag:80, range:340, reload:3.0, proj:1, desc:"Torrent of paint, short range." },
-  bazooka:      { name:"Rocket Launcher",  cost:1500, dmg:1, fireRate:1700,spread:0.03, mag:4,  range:600, reload:2.8, proj:1, splash:110, pspeed:320, desc:"Fast rocket, big splat — blocked by terrain." },
-  grenade_launcher:{ name:"Grenade Launcher", cost:1300, dmg:1, fireRate:1400, spread:0.05, mag:5, range:360, reload:2.4, proj:1, splash:48, pspeed:170, lob:true, desc:"Lobbed grenade — flies over terrain, ~3-tile splat." },
+  bazooka:      { name:"Rocket Launcher",  cost:1500, dmg:1, fireRate:1700,spread:0.03, mag:4,  range:600, reload:2.8, proj:1, splash:110, pspeed:380, desc:"Fast rocket, big splat — blocked by terrain." },
+  grenade_launcher:{ name:"Grenade Launcher", cost:1300, dmg:1, fireRate:1400, spread:0.05, mag:5, range:360, reload:2.4, proj:1, splash:48, pspeed:110, lob:true, desc:"Lobbed grenade — very slow, flies over terrain, ~3-tile splat." },
   shotgun:      { name:"Shotgun",          cost:800,  dmg:1, fireRate:900, spread:0.32, mag:6,  range:190, reload:1.9, proj:3, desc:"3-pellet spread, very short range." },
   blowgun:      { name:"Blowgun",          cost:600,  dmg:1, fireRate:750, spread:0.025,mag:10, range:360, reload:1.5, proj:1, silent:true, desc:"Silent darts, medium range." },
   auto_pistol:  { name:"Auto Pistol",      cost:500,  dmg:1, fireRate:380, spread:0.05, mag:12, range:250, reload:1.2, proj:1, desc:"Quick, light, short range." },
 };
-const ARMOR = {
-  none:   { name:"No Armor",      cost:0,    deflect:0,    spd:1.0,  desc:"No protection — one hit ends your round." },
-  light:  { name:"Light Armor",   cost:500,  deflect:0.25, spd:0.95, desc:"25% chance a paintball bounces off." },
-  medium: { name:"Medium Armor",  cost:1500, deflect:0.40, spd:0.88, desc:"40% bounce chance, a bit slower." },
-  heavy:  { name:"Heavy Armor",   cost:3000, deflect:0.55, spd:0.80, desc:"55% bounce chance, noticeably slower." },
+const WEAPON_MODS = {
+  magazine: { name:"Magazine",    cost:900,  wt:2, ammo:30, desc:"+30 paintballs to your round pool." },
+  buckshot: { name:"Buckshot",    cost:1100, wt:2, proj:3, spreadAdd:0.26, rangeMul:0.6, fireMul:1.25, ammoMul:3, desc:"3-pellet spread; short range; 3x ammo per shot." },
+  scope:    { name:"Scope",       cost:1300, wt:2, rangeMul:1.5, fireMul:1.3, desc:"+50% range; slower fire." },
+  lightning:{ name:"Lightning",   cost:1200, wt:2, fireMul:0.55, rangeMul:0.7, desc:"Much faster fire; shorter range." },
+  golden:   { name:"Golden Gun",  cost:2500, wt:3, golden:true, desc:"Arm a golden bullet (F): max range + fast, one shot then reverts." },
 };
-const VISION = {
-  none:    { name:"No Optics",       cost:0,    desc:"Standard sight." },
-  thermal: { name:"Thermal Optics",  cost:2500, reveal:'mountain', desc:"Spot enemies hidden on mountains." },
-  gamma:   { name:"Gamma Optics",    cost:2500, reveal:'forest',  desc:"See enemies hidden in forest & hills." },
-  satellite:{name:"Satellite Uplink",cost:4000, reveal:'both',    desc:"See every concealed enemy." },
-};
-const CAMO = {
-  none:     { name:"No Camo",       cost:0,   terrain:-1, desc:"No concealment bonus." },
-  forest:   { name:"Forest Camo",   cost:400, terrain:FOREST, desc:"Hidden at range while in forest." },
-  mountain: { name:"Mountain Camo", cost:400, terrain:MOUNT,  desc:"Hidden at range while on mountains." },
-  water:    { name:"Water Camo",    cost:400, terrain:WATER,  desc:"Hidden at range while in water." },
-  plains:   { name:"Plains Camo",   cost:400, terrain:PLAIN,  desc:"Hidden at range while on plains." },
+const ARMOR_CHIPS = {
+  light_plate: { name:"Light Plating", cost:500,  wt:3, deflect:0.08, desc:"+8% bounce chance. Anyone." },
+  heavy_plate: { name:"Heavy Plating", cost:1800, wt:8, deflect:0.14, heavy:true, desc:"+14% bounce; very heavy. Vet/Heavy/Officer only." },
+  ammo_pouch:  { name:"Ammo Pouch",    cost:600,  wt:2, ammo:30, desc:"+30 paintballs to your round pool." },
+  camo:        { name:"Camo",          cost:800,  wt:1, camo:true, desc:"Hides you on the enemy minimap (max 2; beaten by Satellite)." },
+  thermal:     { name:"Thermal Optics",cost:2000, wt:3, reveal:'mountain', desc:"See through mountains (line of sight)." },
+  gamma:       { name:"Gamma Optics",  cost:2000, wt:3, reveal:'forest', desc:"See through forest (line of sight)." },
+  satellite:   { name:"Satellite",     cost:3500, wt:4, reveal:'both', sat:true, desc:"See enemies on the minimap (beaten by Camo)." },
 };
 const GADGETS = {
   none:   { name:"No Gadget",  cost:0,    desc:"Empty gadget slot." },
@@ -116,12 +121,7 @@ const GADGETS = {
   jetpack:{ name:"Jetpack",    cost:1500, passive:true, desc:"Ignore terrain slowdown (passive)." },
   decoy:  { name:"Decoy",      cost:400,  charges:2, desc:"Press G to drop a fake clone (2/round)." },
 };
-const AMMO = {
-  normal: { name:"Standard Paint", cost:0,   speed:190, rangeMul:1.0,  pierce:false, desc:"Standard lobbed paint." },
-  fast:   { name:"Fast Paint",     cost:600, speed:260, rangeMul:1.15, pierce:false, desc:"Faster and a bit longer." },
-  ap:     { name:"Armor-Piercing", cost:900, speed:230, rangeMul:1.0,  pierce:true,  desc:"Ignores armor's bounce chance." },
-};
-const CATALOG = { weapon:WEAPONS, armor:ARMOR, vision:VISION, camo:CAMO, gadget:GADGETS, ammo:AMMO };
+const CATALOG = { weapon:WEAPONS, wmod:WEAPON_MODS, chip:ARMOR_CHIPS, gadget:GADGETS };
 const CATS = Object.keys(CATALOG);
 
 // special ammo is consumable: a purchase grants this many shots, then you must rebuy
@@ -170,6 +170,7 @@ class Game {
     this.players=new Map(); this.bots=[]; this.balls=[]; this.mines=[]; this.turrets=[]; this.decoys=[];
     this.events=[]; this.nextId=1;
     this.roundsWon={blue:0,red:0}; this.pot=0; this.mode='tdm'; this.tournament=false; this.flags=[]; this.caps={blue:0,red:0};
+    this.invWave=1; this.invSession=false; this.superNext=false; this.superRound=false; this.doubleRewards=false; this.goldenEnded=false;
     this.wallets=(saved&&saved.wallets)?Object.assign({},saved.wallets):{};
     this.owned  =(saved&&saved.owned)  ?Object.assign({},saved.owned)  :{};   // key -> ["weapon:assault_rifle", ...]
     this.xp     =(saved&&saved.xp)     ?Object.assign({},saved.xp)     :{};   // key -> total splats
@@ -208,34 +209,40 @@ class Game {
 
   // ---- effective stats ----
   weaponOf(p){ return WEAPONS[p.equip.weapon] || WEAPONS[CLASSES[p.cls].defWeapon]; }
-  deflectChance(p){ return (ARMOR[p.equip.armor]||ARMOR.none).deflect||0; }
+  deflectChance(p){ let d=0; for(const c of (p.equip.chips||[])){ const cd=ARMOR_CHIPS[c]; if(cd&&cd.deflect) d+=cd.deflect; } return Math.min(0.8,d); }
   stats(p){
-    const cls=CLASSES[p.cls]; const w=this.weaponOf(p); const arm=ARMOR[p.equip.armor]||ARMOR.none; const am=AMMO[p.equip.ammo]||AMMO.normal;
+    const cls=CLASSES[p.cls]; const w=this.weaponOf(p);
+    let fireRate=w.fireRate, range=w.range, spread=w.spread, proj=w.proj||1, mag=w.mag, reload=w.reload;
+    let ammoMul=1, ammoPool=BASE_AMMO, golden=false, weight=WEAPON_WT;
+    for(const m of (p.equip.wmods||[])){ const md=WEAPON_MODS[m]; if(!md) continue; weight+=md.wt||0;
+      if(md.ammo) ammoPool+=md.ammo; if(md.rangeMul) range*=md.rangeMul; if(md.fireMul) fireRate*=md.fireMul;
+      if(md.proj) proj=md.proj; if(md.spreadAdd) spread+=md.spreadAdd; if(md.ammoMul) ammoMul*=md.ammoMul; if(md.golden) golden=true; }
+    let deflect=0, reveal=null, sat=false, camoN=0;
+    for(const c of (p.equip.chips||[])){ const cd=ARMOR_CHIPS[c]; if(!cd) continue; weight+=cd.wt||0;
+      if(cd.deflect) deflect+=cd.deflect; if(cd.ammo) ammoPool+=cd.ammo; if(cd.camo) camoN++; if(cd.sat) sat=true;
+      if(cd.reveal){ if(cd.reveal==='both') reveal='both'; else if(reveal!=='both') reveal=cd.reveal; } }
     const jet = p.equip.gadget==='jetpack';
-    return {
-      hp:1, speed:cls.speed*arm.spd*SPEED_SCALE, color:cls.color, deflect:arm.deflect||0,
-      dmg:1, fireRate:w.fireRate, spread:w.spread, mag:w.mag, reload:w.reload, proj:w.proj||1,
-      range:w.range*(am.rangeMul||1), splash:w.splash||0, silent:!!w.silent,
-      ammoSpeed:am.speed||760, pierce:!!am.pierce, jetpack:jet,
-    };
+    return { hp:1, speed:cls.speed*SPEED_SCALE, color:cls.color, deflect:Math.min(0.8,deflect),
+      dmg:1, fireRate, spread, mag, reload, proj, range, splash:w.splash||0, pspeed:w.pspeed||BALL_SPEED, scope:!!w.scope, lob:!!w.lob,
+      ammoMul, ammoPool, golden, reveal, sat, camoN:Math.min(MAX_CAMO,camoN), weight, jetpack:jet };
   }
 
   // ---- spawning ----
   teamSpawn(team){ const yr=()=>rand(120,ARENA.h-120); return team==='blue'?{x:rand(80,180),y:yr()}:{x:rand(ARENA.w-180,ARENA.w-80),y:yr()}; }
-  defaultEquip(cls){ return { weapon:CLASSES[cls].defWeapon, armor:'none', vision:'none', camo:'none', gadget:'none', ammo:'normal' }; }
+  defaultEquip(cls){ return { weapon:CLASSES[cls].defWeapon, gadget:'none', wmods:[], chips:[] }; }
   newFighter(team,cls,isBot){
     const s=this.teamSpawn(team);
     const f={ id:this.nextId++, bot:!!isBot, team, cls, x:s.x,y:s.y,r:14,aim:team==='blue'?0:Math.PI,
       hp:1,maxhp:1,alive:true, ammo:0,reloading:false,reloadT:0,cool:0, kills:0,deaths:0,
       wantAnte:false, anteIn:false, zone:null, equip:this.defaultEquip(cls), mineCharges:0, decoyCharges:0, hasTurret:false,
-      ammoStock:{fast:0,ap:0}, roundKills:0, anteAmt:100, ready:true, activeThisRound:false, afkRounds:0, spawnedThisRound:false,
+      goldenArmed:false, goldenCD:0, roundKills:0, anteAmt:100, ready:true, activeThisRound:false, afkRounds:0, spawnedThisRound:false, golden:false, fast:false, shield:0, spdMul:1,
       input:{mx:0,my:0,aim:0,fire:false,reload:false,deploy:false},
       ai:{target:null,repath:0,strafe:Math.random()<.5?1:-1,jitter:0,wander:rand(0,6.28)},
       name:isBot?BOTNAMES[(NAMEI++)%BOTNAMES.length]:'Player', key:null };
     if(isBot){ // give bots some variety/loadout
       const cw=CLASSES[cls].weapons; f.equip.weapon=cw[Math.floor(rand(0,cw.length))];
     }
-    const st=this.stats(f); f.maxhp=st.hp; f.hp=st.hp; f.ammo=st.mag;
+    const st=this.stats(f); f.maxhp=st.hp; f.hp=st.hp; f.ammo=st.ammoPool;
     return f;
   }
 
@@ -250,7 +257,7 @@ class Game {
     // honor requested class only if unlocked
     if(cls && CLASSES[cls] && this.getLevel(f)>=CLASS_UNLOCK_LEVEL) f.cls=cls;
     f.equip=this.defaultEquip(f.cls);
-    const st=this.stats(f); f.maxhp=st.hp; f.hp=st.hp; f.ammo=st.mag;
+    const st=this.stats(f); f.maxhp=st.hp; f.hp=st.hp; f.ammo=st.ammoPool;
     if(this.phase==='active') f.alive=false;
     else { const s=this.stageRect(); f.x=s.x+s.w/2+((this.players.size%6)-2.5)*46; f.y=s.y+s.h-60; f.alive=true; f.zone=null; }
     this.players.set(f.id,f); this.rebalanceBots();
@@ -268,79 +275,72 @@ class Game {
   // ---- input / class / shop ----
   setInput(id,inp){ const p=this.players.get(id); if(!p) return;
     p.input.mx=clamp(+inp.mx||0,-1,1); p.input.my=clamp(+inp.my||0,-1,1);
-    p.input.aim=+inp.aim||0; p.input.aimDist=Math.max(0,+inp.aimDist||0); p.input.fire=!!inp.fire; if(inp.reload) this.reload(p); if(inp.deploy) this.deploy(p);
+    p.input.aim=+inp.aim||0; p.input.aimDist=Math.max(0,+inp.aimDist||0); p.input.fire=!!inp.fire; if(inp.armGolden) this.armGolden(p); if(inp.deploy) this.deploy(p);
     if(this.phase==='active' && (p.input.mx||p.input.my||p.input.fire)) p.activeThisRound=true; }
   setClass(id,cls){ const p=this.players.get(id); if(!p||!CLASSES[cls]) return {ok:false,msg:'bad class'};
     if(cls!=='Trooper' && this.getLevel(p)<CLASS_UNLOCK_LEVEL) return {ok:false,msg:`Unlocks at level ${CLASS_UNLOCK_LEVEL}`};
     p.cls=cls; p.equip=this.defaultEquip(cls);
-    const st=this.stats(p); p.maxhp=st.hp; if(this.phase!=='active') p.hp=st.hp; p.ammo=st.mag; p.reloading=false; p.cool=0;
+    const st=this.stats(p); p.maxhp=st.hp; if(this.phase!=='active') p.hp=st.hp; p.ammo=st.ammoPool; p.cool=0;
     return {ok:true}; }
   canEquip(p,cat,id){ const def=CATALOG[cat][id]; if(!def) return false;
     if(cat==='weapon' && !CLASSES[p.cls].weapons.includes(id)) return false;
     if(cat==='gadget' && id!=='none' && !CLASSES[p.cls].gear.includes(id)) return false;
+    if(cat==='chip' && def.heavy && !HEAVY_CLASSES.includes(p.cls)) return false;
     return true; }
   buy(id,catid){
     const p=this.players.get(id); if(!p) return {ok:false,msg:'no player'};
     const [cat,item]=String(catid).split(':'); const def=CATALOG[cat]&&CATALOG[cat][item];
     if(!def) return {ok:false,msg:'no such item'};
-    // ammo is consumable, not owned permanently: standard is free, fast/AP buy limited stock
-    if(cat==='ammo'){
-      if(!p.ammoStock) p.ammoStock={fast:0,ap:0};
-      if(item==='normal'){ p.equip.ammo='normal'; return {ok:true,money:this.getMoney(p),ammoStock:p.ammoStock,msg:'Standard paint equipped'}; }
-      if(this.getMoney(p)<def.cost) return {ok:false,money:this.getMoney(p),ammoStock:p.ammoStock,msg:'not enough Paint Coins'};
-      this.addMoney(p,-def.cost); p.ammoStock[item]+=(AMMO_STOCK[item]||0); p.equip.ammo=item;
-      this.emit({type:'msg',text:`${p.name} bought ${def.name} (+${AMMO_STOCK[item]} rounds).`});
-      return {ok:true,money:this.getMoney(p),ammoStock:p.ammoStock,msg:`Bought ${def.name}`};
-    }
     if(!this.canEquip(p,cat,item)) return {ok:false,money:this.getMoney(p),msg:`${p.cls} can't use that`};
-    if(this.owns(p,cat,item)) { this.equip(id,catid); return {ok:true,money:this.getMoney(p),msg:'Equipped'}; }
+    if(this.owns(p,cat,item)) return {ok:true,money:this.getMoney(p),owned:this.ownedSet(p.key),msg:'Already owned'};
     if(this.getMoney(p)<def.cost) return {ok:false,money:this.getMoney(p),msg:'not enough Paint Coins'};
     this.addMoney(p,-def.cost); this.ownedSet(p.key).push(cat+':'+item);
-    this.equip(id,catid);
     this.emit({type:'msg',text:`${p.name} bought ${def.name}.`});
-    return {ok:true,money:this.getMoney(p),msg:`Bought ${def.name}`};
+    return {ok:true,money:this.getMoney(p),owned:this.ownedSet(p.key),msg:`Bought ${def.name}`};
   }
-  equip(id,catid){
-    const p=this.players.get(id); if(!p) return {ok:false};
-    const [cat,item]=String(catid).split(':'); if(!CATALOG[cat]||!CATALOG[cat][item]) return {ok:false};
-    if(cat==='ammo'){ if(item!=='normal' && (!p.ammoStock||p.ammoStock[item]<=0)) return {ok:false,msg:'no stock — buy more'}; p.equip.ammo=item; return {ok:true,ammoStock:p.ammoStock}; }
-    if(!this.owns(p,cat,item)) return {ok:false,msg:'not owned'};
-    if(!this.canEquip(p,cat,item)) return {ok:false,msg:'cannot equip'};
-    p.equip[cat]=item;
-    const st=this.stats(p); p.maxhp=st.hp; if(this.phase!=='active') p.hp=Math.min(p.hp,st.hp); p.ammo=Math.min(p.ammo,st.mag);
-    return {ok:true};
+  applyLoadout(id,ld){
+    const p=this.players.get(id); if(!p||!ld) return {ok:false,msg:'no player'};
+    const wid=(ld.weapon&&CATALOG.weapon[ld.weapon])?ld.weapon:p.equip.weapon;
+    if(!this.owns(p,'weapon',wid)||!this.canEquip(p,'weapon',wid)) return {ok:false,msg:'weapon not available'};
+    const wmods=Array.isArray(ld.wmods)?ld.wmods.filter(m=>WEAPON_MODS[m]).slice(0,WMOD_SLOTS):[];
+    for(const m of wmods) if(!this.owns(p,'wmod',m)) return {ok:false,msg:'mod not owned'};
+    const chips=Array.isArray(ld.chips)?ld.chips.filter(c=>ARMOR_CHIPS[c]).slice(0,CHIP_SLOTS):[];
+    for(const c of chips){ if(!this.owns(p,'chip',c)||!this.canEquip(p,'chip',c)) return {ok:false,msg:'chip not available'}; }
+    if(chips.filter(c=>ARMOR_CHIPS[c].camo).length>MAX_CAMO) return {ok:false,msg:`Max ${MAX_CAMO} camo chips`};
+    const gad=(ld.gadget&&CATALOG.gadget[ld.gadget])?ld.gadget:'none';
+    if(gad!=='none' && (!this.owns(p,'gadget',gad)||!this.canEquip(p,'gadget',gad))) return {ok:false,msg:'gadget not available'};
+    const probe={cls:p.cls,equip:{weapon:wid,wmods,chips,gadget:gad}};
+    const wt=this.stats(probe).weight, cap=weightCapacity(this.getLevel(p));
+    if(wt>cap) return {ok:false,msg:`Too heavy: ${wt}/${cap} — level up for more capacity.`,weight:wt,cap};
+    p.equip={weapon:wid,wmods,chips,gadget:gad};
+    const st=this.stats(p); p.maxhp=st.hp; if(this.phase!=='active') p.hp=Math.min(p.hp,st.hp); p.ammo=Math.min(p.ammo,st.ammoPool);
+    p.mineCharges=(GADGETS[gad]&&GADGETS[gad].charges)||0; p.decoyCharges=gad==='decoy'?GADGETS.decoy.charges:0;
+    return {ok:true,weight:wt,cap,money:this.getMoney(p)};
   }
   setAnte(id,on,amt){ const p=this.players.get(id); if(!p) return {ok:false}; p.wantAnte=!!on; if(amt!==undefined){ const a=+amt; if(ANTE_OPTIONS.includes(a)) p.anteAmt=a; } return {ok:true,wantAnte:p.wantAnte,anteAmt:p.anteAmt}; }
   setReady(id,on){ const p=this.players.get(id); if(!p) return {ok:false}; p.ready=!!on; if(p.ready) p.afkRounds=0; return {ok:true,ready:p.ready}; }
   readyCount(){ let n=0; for(const p of this.players.values()) if(p.ready!==false) n++; return n; }
 
   // ---- combat ----
-  reload(f){ if(f.reloading||!f.alive) return; const st=this.stats(f); if(f.ammo>=st.mag) return; f.reloading=true; f.reloadT=st.reload; }
+  armGolden(f){ if(!f||!f.alive) return; const st=this.stats(f); if(st.golden && (f.goldenCD||0)<=0) f.goldenArmed=true; }
   fire(f){
-    if(!f.alive||f.reloading||f.cool>0) return;
-    if(f.ammo<=0){ this.reload(f); return; }
-    // consumable special ammo: fast/AP draw from a limited stock, then fall back to standard
-    let ammoId=f.equip.ammo;
-    if(ammoId==='fast'||ammoId==='ap'){
-      if(!f.ammoStock || f.ammoStock[ammoId]<=0){ const was=ammoId; f.equip.ammo='normal'; ammoId='normal';
-        this.emit({type:'msg',text:`${f.name} is out of ${was==='fast'?'Fast Paint':'AP Paint'} — back to Standard.`}); }
-    }
+    if(!f.alive||f.cool>0) return;
+    const unlimited=(this.mode==='invaders');
+    if(!unlimited && f.ammo<=0) return;                          // dry: round pool spent (refills next round)
     const st=this.stats(f);
     const wdef=WEAPONS[f.equip.weapon]||WEAPONS[CLASSES[f.cls].defWeapon];
-    f.cool=st.fireRate/1000; f.ammo--; f.firedT=this.clock;
-    if(ammoId==='fast'||ammoId==='ap'){ f.ammoStock[ammoId]=Math.max(0,f.ammoStock[ammoId]-(st.proj||1)); }
-    const pf=!!(wdef&&wdef.scope);                       // sniper rounds pass through forest
-    const col=paintColor(wdef,ammoId);
-    const bspeed=wdef.pspeed||st.ammoSpeed;              // grenades/rockets set their own projectile speed
-    const lob=!!wdef.lob;                                // lobbed shots fly over terrain
-    const reach=Math.min(st.range, (f.input&&f.input.aimDist>0)?f.input.aimDist:st.range);  // shoot short if you aim short
-    for(let i=0;i<st.proj;i++){
+    const useGolden = f.goldenArmed && st.golden;
+    f.cool=st.fireRate/1000; f.firedT=this.clock;
+    const cost = useGolden?1:(st.ammoMul||1); if(!unlimited) f.ammo=Math.max(0,f.ammo-cost);
+    let pf=st.scope, lob=st.lob, range=st.range, proj=st.proj, bspeed=st.pspeed, col=paintColor(wdef,'normal'), splash=st.splash;
+    if(useGolden){ f.goldenArmed=false; f.goldenCD=GOLDEN_CD; range=wdef.range*2.5; bspeed=210; col='#ffd700'; pf=true; lob=false; proj=1; splash=0; this.emit({type:'golden',x:Math.round(f.x),y:Math.round(f.y)}); }
+    const reach=Math.min(range, (f.input&&f.input.aimDist>0)?f.input.aimDist:range);  // shoot short if you aim short
+    for(let i=0;i<proj;i++){
       const ang=f.aim+(Math.random()-0.5)*st.spread*2;
       this.balls.push({ x:f.x+Math.cos(f.aim)*(f.r+6), y:f.y+Math.sin(f.aim)*(f.r+6), x0:f.x, y0:f.y, pforest:pf, lob:lob,
-        vx:Math.cos(ang),vy:Math.sin(ang),speed:bspeed, dmg:st.dmg, team:f.team, owner:f.id,
-        life:reach/bspeed, color:col, r:5, pierce:st.pierce, splash:st.splash });
+        vx:Math.cos(ang),vy:Math.sin(ang),speed:bspeed, dmg:1, team:f.team, owner:f.id,
+        life:reach/bspeed, color:col, r:5, pierce:false, splash:splash });
     }
-    if(f.ammo<=0) this.reload(f);
   }
   deploy(f){
     if(!f.alive) return; const g=f.equip.gadget;
@@ -352,12 +352,15 @@ class Game {
     if(!target.alive) return;
     // One hit eliminates. Armor = chance the paintball bounces off (unless armor-piercing).
     if(!pierce && Math.random() < this.deflectChance(target)){ this.emit({type:'deflect',x:target.x,y:target.y,c:'#e6edf3'}); return; }
+    if(target.shield>0){ target.shield--; this.emit({type:'deflect',x:target.x,y:target.y,c:'#ffd700'}); return; }   // super-bot soaks an extra hit
     target.alive=false; target.deaths++;
     if(this.mode==='ctf'){ for(const fl of this.flags) if(fl.carrier===target.id){ fl.carrier=null; fl.atHome=false; fl.dropT=20; fl.x=target.x; fl.y=target.y; } }
-    this.emit({type:'splat',x:target.x,y:target.y,c:attacker?CLASSES[attacker.cls].color:'#fff'});
-    const rew=(attacker&&!attacker.bot)?SPLAT_REWARD:0, xpg=(attacker&&!attacker.bot)?1:0;
+    this.emit({type:'splat',x:target.x,y:target.y,c:target.golden?'#ffd700':(attacker?CLASSES[attacker.cls].color:'#fff')});
+    const mul=this.doubleRewards?2:1; const base=target.bot?BOT_SPLAT_REWARD:SPLAT_REWARD;
+    const rew=(attacker&&!attacker.bot&&!this.tournament)?base*mul:0, xpg=(attacker&&!attacker.bot)?((this.tournament?2:1)*mul):0;
     this.emit({type:'elim',byId:attacker?attacker.id:0,by:attacker?attacker.name:'?',byTeam:attacker?attacker.team:'',vtId:target.id,vt:target.name,vtTeam:target.team, rew, xp:xpg});
-    if(attacker){ attacker.kills++; attacker.roundKills=(attacker.roundKills||0)+1; if(!attacker.bot){ if(!this.tournament) this.addMoney(attacker,SPLAT_REWARD); this.gainXp(attacker,1); } }
+    if(attacker){ attacker.kills++; attacker.roundKills=(attacker.roundKills||0)+1; if(!attacker.bot){ if(rew) this.addMoney(attacker,rew); if(xpg) this.gainXp(attacker,xpg); } }
+    if(target.bot && target.golden && !this.superRound){ this.superNext=true; this.goldenEnded=true; this.emit({type:'goldenbot',by:attacker?attacker.name:'?'}); }
   }
   splashDamage(x,y,radius,team,attacker,color){
     this.emit({type:'splash',x:Math.round(x),y:Math.round(y),r:Math.round(radius),c:color||(attacker?CLASSES[attacker.cls].color:'#ffd166')});
@@ -372,7 +375,7 @@ class Game {
   // ---- modes & tournament ----
   allAnted(){ const ps=[...this.players.values()]; return ps.length>0 && ps.every(p=>p.wantAnte && this.getMoney(p)>=p.anteAmt); }
   pickMode(){ let pool=MODES.slice(); if(this.players.size<2) pool=pool.filter(m=>m!=='ctf'); if(!pool.length) pool=['tdm']; return pool[Math.floor(rand(0,pool.length))]; }
-  modeName(){ return this.tournament?MODE_NAMES.tournament:(MODE_NAMES[this.mode]||this.mode); }
+  modeName(){ if(this.superRound) return 'SUPER Bot Invaders'; return this.tournament?MODE_NAMES.tournament:(MODE_NAMES[this.mode]||this.mode); }
   assignTeams(mode){ const ps=[...this.players.values()];
     if(mode==='invaders'){ for(const p of ps) p.team='blue'; }
     else { ps.forEach((p,i)=>{ p.team=(i%2===0)?'blue':'red'; }); } }
@@ -381,6 +384,12 @@ class Game {
     if(side===0){ b.x=rand(60,ARENA.w-60); b.y=60; } else if(side===1){ b.x=rand(60,ARENA.w-60); b.y=ARENA.h-60; }
     else if(side===2){ b.x=60; b.y=rand(60,ARENA.h-60); } else { b.x=ARENA.w-60; b.y=rand(60,ARENA.h-60); }
     this.bots.push(b); } }
+  applyInvadersWave(){ const w=this.invWave;                           // mark fast / super bots, scaling with wave
+    const fastFrac = w<3?0:Math.min(0.6,0.08*(w-2));
+    const superFrac = (w%5===0)?Math.min(0.4,0.1*(w/5)):0;
+    for(const b of this.bots){ b.golden=false; b.fast=false; b.shield=0; b.spdMul=1;
+      if(Math.random()<superFrac){ b.fast=true; b.spdMul=1.8; b.shield=1; }
+      else if(Math.random()<fastFrac){ b.fast=true; b.spdMul=FAST_SPD_MUL; } } }
   setupFlags(){ const by=Math.round(ARENA.h/2);
     this.flags=[ {team:'blue',homeX:90,homeY:by,x:90,y:by,carrier:null,atHome:true,dropT:0},
                  {team:'red', homeX:ARENA.w-90,homeY:by,x:ARENA.w-90,y:by,carrier:null,atHome:true,dropT:0} ];
@@ -404,19 +413,27 @@ class Game {
     this.roundNum++; this.phase='active'; this.roundTimer=ROUND_TIME; this.balls=[]; this.mines=[]; this.turrets=[]; this.decoys=[]; this.flags=[]; this.caps={blue:0,red:0};
     const newSeries = !this.tournament && this.allAnted();         // tournament begins when everyone has anted
     if(newSeries){ this.tournament=true; this.roundsWon={blue:0,red:0}; }
-    this.mode = this.tournament ? 'tdm' : this.pickMode();          // tournament locks to Team Deathmatch
+    this.superRound = this.superNext; this.superNext=false;        // Golden-bot kill launches a one-off Super Invaders
+    this.doubleRewards = this.superRound;
+    if(this.superRound) this.mode='invaders';
+    else if(this.tournament) this.mode='tdm';
+    else if(this.invSession) this.mode='invaders';                 // a Bot Invaders session runs until a wipe
+    else this.mode = this.pickMode();
+    if(this.mode==='invaders' && !this.superRound && !this.invSession){ this.invSession=true; this.invWave=1; }
     const heads=Math.max(1,this.players.size);
     const sz=arenaSizeFor(this.mode==='invaders'?Math.round(heads*1.5):this.players.size); ARENA.w=sz.w; ARENA.h=sz.h;
     this.obstacles=buildObstacles(); const T=generateTerrain(); this.grid=T.grid; this.tcols=T.cols; this.trows=T.rows; this.terrainMeta={cols:T.cols,rows:T.rows,tile:TILE};
     this.emit({type:'mapchange'});
-    if(!this.tournament || newSeries) this.assignTeams(this.mode);  // keep teams stable across a tournament series
+    if(!this.tournament || newSeries) this.assignTeams(this.mode);
     this.bots=[];
-    if(this.mode==='invaders') this.spawnEdgeBots(BOTS_PER_PLAYER*heads); else if(!this.tournament) this.rebalanceBots();   // tournament is players-only
+    if(this.superRound){ this.spawnEdgeBots(SUPER_BOTS_PER_PLAYER*heads); for(const b of this.bots){ b.fast=true; b.spdMul=1.5; } }
+    else if(this.mode==='invaders'){ this.spawnEdgeBots((BOTS_PER_PLAYER+(this.invWave-1)*INV_STEP)*heads); this.applyInvadersWave(); }
+    else if(!this.tournament){ this.rebalanceBots(); for(const b of this.bots) b.golden=(Math.random()<GOLD_BOT_CHANCE); }   // golden bots only in TDM/CTF
     for(const f of [...this.players.values(),...this.bots]){
       const st=this.stats(f);
       if(this.mode==='invaders' && !f.bot){ f.x=ARENA.w/2+rand(-70,70); f.y=ARENA.h/2+rand(-70,70); }      // Bot Invaders: team starts centered
       else if(!(this.mode==='invaders'&&f.bot)){ const s=this.teamSpawn(f.team); f.x=s.x; f.y=s.y; }   // edge-bots keep their edge spot
-      f.aim=f.team==='blue'?0:Math.PI; f.maxhp=st.hp; f.hp=st.hp; f.alive=(f.bot?true:p_ready(f)); f.ammo=st.mag; f.reloading=false; f.cool=0; f.roundKills=0; f.activeThisRound=false; f.spawnedThisRound=(f.bot?false:p_ready(f));
+      f.aim=f.team==='blue'?0:Math.PI; f.maxhp=st.hp; f.hp=st.hp; f.alive=(f.bot?true:p_ready(f)); f.ammo=(this.mode==='invaders'?99999:st.ammoPool); f.cool=0; f.goldenArmed=false; f.goldenCD=0; f.roundKills=0; f.activeThisRound=false; f.spawnedThisRound=(f.bot?false:p_ready(f));
       f.mineCharges=(GADGETS[f.equip.gadget]&&GADGETS[f.equip.gadget].charges)||0;
       f.decoyCharges=f.equip.gadget==='decoy'?(GADGETS.decoy.charges):0;
       f.hasTurret=false;
@@ -424,7 +441,7 @@ class Game {
     if(this.mode==='ctf') this.setupFlags();
     if(newSeries){ this.pot=0; for(const p of this.players.values()){ if(this.getMoney(p)>=p.anteAmt){ this.addMoney(p,-p.anteAmt); this.pot+=p.anteAmt; p.anteIn=true; } } }
     else if(!this.tournament){ this.pot=0; for(const p of this.players.values()) p.anteIn=false; }
-    this.emit({type:'roundstart',round:this.roundNum,pot:this.pot,mode:this.mode,tournament:this.tournament,modeName:this.modeName()});
+    this.emit({type:'roundstart',round:this.roundNum,pot:this.pot,mode:this.mode,tournament:this.tournament,modeName:this.modeName(),superRound:this.superRound,wave:this.invSession?this.invWave:0});
   }
   endRound(winner){
     this.phase='intermission'; this.phaseTimer=SHOP_TIME;
@@ -433,8 +450,11 @@ class Game {
       if(p.activeThisRound) p.afkRounds=0;
       else { p.afkRounds=(p.afkRounds||0)+1; if(p.afkRounds>=2 && p.ready!==false){ p.ready=false; p.afkRounds=0; this.emit({type:'afk',id:p.id,name:p.name}); this.emit({type:'msg',text:`${p.name} set to Sitting Out (inactive 2 rounds).`}); } } }
     if(mode==='invaders'){
-      for(const p of this.players.values()){ const bonus=(p.roundKills||0)*BOT_BONUS+(p.alive?SURVIVOR_BONUS:0); if(bonus) this.addMoney(p,bonus); }
-      this.emit({type:'msg',text: winner==='blue'?'You survived the invasion! Bonus paid per bot splatted.':'The swarm overran you — regroup.'});
+      const bmul=this.superRound?2:1, cleared=(winner==='blue');
+      for(const p of this.players.values()){ const bonus=((p.roundKills||0)*BOT_BONUS+(p.alive?SURVIVOR_BONUS:0))*bmul; if(bonus) this.addMoney(p,bonus); }
+      if(this.superRound){ this.superRound=false; this.doubleRewards=false; this.emit({type:'msg',text:cleared?'SUPER Invaders cleared — double rewards paid!':'Super Invaders overran you.'}); }
+      else if(cleared){ this.invWave++; this.emit({type:'msg',text:`Wave cleared! Wave ${this.invWave} incoming…`}); }
+      else { this.emit({type:'msg',text:`Overrun on wave ${this.invWave} — invasion reset.`}); this.invWave=1; this.invSession=false; }
     } else if(winner!=='tie' && !this.tournament){
       for(const p of this.players.values()) if(p.team===winner){ this.addMoney(p,ROUND_WIN_BONUS); if(p.alive) this.addMoney(p,SURVIVOR_BONUS); }
     }
@@ -449,6 +469,7 @@ class Game {
         for(const p of this.players.values()){ p.anteIn=false; p.wantAnte=false; }
       }
     } else { this.roundsWon={blue:0,red:0}; for(const p of this.players.values()) p.anteIn=false; this.pot=0; }
+    if(this.invSession || this.superNext) this.phaseTimer=8;   // quick breather between waves / into super
     this.placeLobby();
     this.emit({type:'roundend',winner,roundsWon:{...this.roundsWon},mode,tournament:this.tournament,seriesOver,modeName:this.modeName()});
   }
@@ -467,15 +488,28 @@ class Game {
   }
 
   // ---- visibility (terrain + camo + vision) ----
-  concealType(f){ const tt=this.terrainCode(f.x,f.y);
-    let t = (tt===FOREST)?'forest' : (tt===MOUNT)?'mountain' : 'none';
-    if(t==='none'){ const cam=CAMO[f.equip?f.equip.camo:'none']; if(cam&&cam.terrain===tt&&cam.terrain!==-1) t=(tt===MOUNT)?'mountain':'forest'; }
-    return t; }
-  canReveal(v,type){ const vt=this.terrainCode(v.x,v.y); const vis=VISION[v.equip?v.equip.vision:'none']; const r=vis&&vis.reveal;
-    if(type==='forest') return vt===MOUNT||vt===HILL||r==='forest'||r==='both';   // high ground or gamma sees forest/hills
-    if(type==='mountain') return r==='mountain'||r==='both';                       // only thermal/satellite see mountain cover
+  // elevation: mountain(3) > hill(2) > forest/trees(1) > plains/water/wasteland(0)
+  tileHeight(code){ return code===MOUNT?3 : code===HILL?2 : code===FOREST?1 : 0; }
+  losClear(v,t){   // a sightline is blocked by terrain as high as (or higher than) BOTH endpoints
+    const vtx=Math.floor(v.x/TILE), vty=Math.floor(v.y/TILE), ttx=Math.floor(t.x/TILE), tty=Math.floor(t.y/TILE);
+    const cap=Math.max(this.tileHeight(this.terrainCode(v.x,v.y)), this.tileHeight(this.terrainCode(t.x,t.y)));
+    const r=this.revealOf(v);
+    const dx=t.x-v.x, dy=t.y-v.y, d=Math.hypot(dx,dy)||1, steps=Math.ceil(d/16);
+    for(let i=1;i<steps;i++){ const fr=i/steps, tx=Math.floor((v.x+dx*fr)/TILE), ty=Math.floor((v.y+dy*fr)/TILE);
+      if((tx===vtx&&ty===vty)||(tx===ttx&&ty===tty)) continue;     // the two players' own tiles never block
+      const c=this.grid[clamp(ty,0,this.trows-1)][clamp(tx,0,this.tcols-1)], h=this.tileHeight(c);
+      if(h===0) continue;
+      if(r==='both') continue;                   // satellite x-rays everything (exception)
+      if(c===MOUNT && r==='mountain') continue;  // thermal sees through mountains (exception)
+      if(c===FOREST && r==='forest') continue;   // gamma sees through forest (exception)
+      if(h>=cap) return false; }                 // taller-or-equal occluder between you both blocks the line
     return true; }
-  canSee(v,t){ if(dist2(v.x,v.y,t.x,t.y)<=PROX*PROX) return true; const ty=this.concealType(t); if(ty==='none') return true; return this.canReveal(v,ty); }
+  revealOf(f){ if(!f||!f.equip||!f.equip.chips) return null; let r=null; for(const c of f.equip.chips){ const cd=ARMOR_CHIPS[c]; if(cd&&cd.reveal){ if(cd.reveal==='both') return 'both'; r=cd.reveal; } } return r; }
+  hasSat(f){ return !!(f&&f.equip&&f.equip.chips&&f.equip.chips.some(c=>ARMOR_CHIPS[c]&&ARMOR_CHIPS[c].sat)); }
+  isCamo(f){ return !!(f&&f.equip&&f.equip.chips&&f.equip.chips.some(c=>ARMOR_CHIPS[c]&&ARMOR_CHIPS[c].camo)); }
+  canSee(v,t){
+    if(dist2(v.x,v.y,t.x,t.y)<=PROX*PROX) return true;          // point-blank: always seen
+    return this.losClear(v,t); }                                // elevation line-of-sight (camo is minimap-only now)
   clearShot(ax,ay,bx,by,pforest){   // can a shot reach the target without hitting blocking terrain?
     const dx=bx-ax,dy=by-ay,d=Math.hypot(dx,dy)||1, steps=Math.ceil(d/14);
     for(let i=1;i<=steps;i++){ const tt=i/steps, x=ax+dx*tt, y=ay+dy*tt;
@@ -497,7 +531,7 @@ class Game {
       if(d<st.range && this.clearShot(f.x,f.y,tgt.x,tgt.y,pf)){ f.aim+=rand(-0.13,0.13); if(Math.random()<0.8) this.fire(f); if(f.equip.gadget==='mine'&&Math.random()<0.004) this.deploy(f); }
       else if(f.ammo<st.mag*0.25) this.reload(f);
     } else { const dir=f.team==='blue'?1:-1; mvx=dir*0.8; mvy=Math.sin(ai.wander)*0.6; ai.wander+=rand(-1,1)*dt; f.aim=dir>0?0:Math.PI; }
-    const m=Math.hypot(mvx,mvy)||1; const mult=st.jetpack?1:SPEED_MULT[this.terrainCode(f.x,f.y)]; const sp=st.speed*mult*0.95;
+    const m=Math.hypot(mvx,mvy)||1; const mult=st.jetpack?1:SPEED_MULT[this.terrainCode(f.x,f.y)]; const sp=st.speed*mult*0.95*(f.spdMul||1);
     f.x+=mvx/m*sp*dt; f.y+=mvy/m*sp*dt; this.collide(f);
   }
 
@@ -516,11 +550,12 @@ class Game {
       p.aim=p.input.aim; this.collide(p); if(p.input.fire) this.fire(p); }
     for(const b of this.bots){ if(b.alive) this.updateAI(b,dt); }
     const all=[...this.players.values(),...this.bots];
-    for(const f of all){ if(f.cool>0) f.cool-=dt; if(f.reloading){ f.reloadT-=dt; if(f.reloadT<=0){ f.reloading=false; f.ammo=this.stats(f).mag; } } }
+    for(const f of all){ if(f.cool>0) f.cool-=dt; if(f.goldenCD>0) f.goldenCD-=dt; }
     this.updateBalls(dt); this.updateMines(); this.updateTurrets(dt); if(this.mode==='ctf') this.updateFlags(dt);
     for(let i=this.decoys.length-1;i>=0;i--){ this.decoys[i].life-=dt; if(this.decoys[i].life<=0) this.decoys.splice(i,1); }
     const ba=this.aliveCount('blue'), ra=this.aliveCount('red');
-    if(![...this.players.values()].some(p=>p.alive)){            // all human players eliminated -> end round
+    if(this.goldenEnded){ this.goldenEnded=false; this.endRound('tie'); return; }   // Golden bot down -> jump to Super Invaders
+    if(![...this.players.values()].some(p=>p.alive)){            // all human players out -> end round
       let w; if(this.mode==='ctf') w=this.caps.blue>this.caps.red?'blue':this.caps.red>this.caps.blue?'red':'tie'; else w=ba>ra?'blue':ra>ba?'red':'tie';
       this.endRound(w); return; }
     if(this.mode==='ctf'){ let w=null;
@@ -528,7 +563,7 @@ class Game {
       else if(this.roundTimer<=0) w=this.caps.blue>this.caps.red?'blue':this.caps.red>this.caps.blue?'red':'tie';
       if(w) this.endRound(w);
     } else if(this.mode==='invaders'){
-      if(ba===0) this.endRound('red'); else if(ra===0) this.endRound('blue'); else if(this.roundTimer<=0) this.endRound('blue');
+      if(ra===0) this.endRound('blue');   // wave cleared -> next wave (wipe handled above; no timer in zombies)
     } else { if(ba===0||ra===0||this.roundTimer<=0){ this.endRound(ba>ra?'blue':ra>ba?'red':'tie'); } }
   }
   updateBalls(dt){
@@ -572,7 +607,7 @@ class Game {
 
   // ---- snapshot ----
   publicFighter(f){ return {id:f.id,n:f.name,tm:f.team,cls:f.cls,x:Math.round(f.x),y:Math.round(f.y),a:+f.aim.toFixed(2),hp:Math.max(0,Math.round(f.hp)),mh:f.maxhp,al:f.alive,bot:f.bot,
-    cam:(f.equip&&f.equip.camo!=='none')?1:0, jet:f.equip&&f.equip.gadget==='jetpack'?1:0}; }
+    cam:this.isCamo(f)?1:0, jet:f.equip&&f.equip.gadget==='jetpack'?1:0, gold:f.golden?1:0, fast:f.fast?1:0, sh:f.shield||0}; }
   snapshot(id,events){
     const me=this.players.get(id); const spectate=me&&!me.alive&&this.phase==='active';
     const lobby=this.phase==='intermission';
@@ -588,23 +623,24 @@ class Game {
       const friendly = me ? (f.team===me.team) : true;
       const recent = me ? ((this.clock-(f.firedT||-99))<3) : true;
       const vis = me ? this.canSee(me,f) : true;
-      if(friendly || f.bot || vis || recent) radar.push({x:Math.round(f.x),y:Math.round(f.y),tm:f.team,me:(me&&f.id===me.id)?1:0}); }
+      const sat = me ? (this.hasSat(me) && !this.isCamo(f)) : false;
+      if(friendly || f.bot || vis || recent || sat) radar.push({x:Math.round(f.x),y:Math.round(f.y),tm:f.team,me:(me&&f.id===me.id)?1:0}); }
     const turrets=this.turrets.map(t=>({id:t.id,x:Math.round(t.x),y:Math.round(t.y),tm:t.team,hp:t.hp,mh:t.maxhp}));
     const decoys=this.decoys.map(d=>({id:d.id,x:Math.round(d.x),y:Math.round(d.y),tm:d.team,cls:d.cls}));
     let mines=[]; if(me) mines=this.mines.filter(m=>m.team===me.team).map(m=>({x:Math.round(m.x),y:Math.round(m.y)}));
     let you=null;
     if(me){ const st=this.stats(me); const li=levelInfo(this.getXp(me));
       you={ id:me.id,name:me.name,cls:me.cls,team:me.team,hp:Math.max(0,Math.round(me.hp)),maxhp:me.maxhp,alive:me.alive,
-        ammo:me.ammo,mag:st.mag,reloading:me.reloading,kills:me.kills,deaths:me.deaths,money:this.getMoney(me),
+        ammo:(this.mode==='invaders'?-1:me.ammo),mag:st.ammoPool,reloading:false,kills:me.kills,deaths:me.deaths,money:this.getMoney(me),
         x:Math.round(me.x),y:Math.round(me.y),terrain:this.terrainCode(me.x,me.y),wantAnte:me.wantAnte,anteIn:me.anteIn,
         level:li.level, xpInto:li.into, xpNeed:li.need, unlockLevel:CLASS_UNLOCK_LEVEL, classUnlocked:li.level>=CLASS_UNLOCK_LEVEL,
-        deflect:st.deflect, zone:me.zone||null, equip:me.equip, owned:this.ownedSet(me.key), mineCharges:me.mineCharges, hasTurret:me.hasTurret, gadget:me.equip.gadget, ammoStock:me.ammoStock||{fast:0,ap:0}, anteAmt:me.anteAmt||100, wantAnte:me.wantAnte, ready:me.ready!==false, spd:Math.round(st.speed*(me.equip.gadget==='jetpack'?1:(SPEED_MULT[this.terrainCode(me.x,me.y)]||1))) }; }
+        deflect:st.deflect, zone:me.zone||null, equip:me.equip, owned:this.ownedSet(me.key), mineCharges:me.mineCharges, hasTurret:me.hasTurret, gadget:me.equip.gadget, weight:st.weight, weightCap:weightCapacity(li.level), golden:st.golden, goldenReady:(me.goldenCD||0)<=0, goldenArmed:!!me.goldenArmed, anteAmt:me.anteAmt||100, wantAnte:me.wantAnte, ready:me.ready!==false, spd:Math.round(st.speed*(me.equip.gadget==='jetpack'?1:(SPEED_MULT[this.terrainCode(me.x,me.y)]||1))) }; }
     let stage=null; if(lobby){ stage=this.stageRect(); stage.zones=this.stageZones(stage); }
     return { t:'state', you, fighters:out, radar, balls:this.balls.map(b=>({x:Math.round(b.x),y:Math.round(b.y),c:b.color})),
       turrets, mines, decoys, space:'arena', stage, phase:this.phase, phaseTimer:Math.max(0,Math.round(this.phaseTimer)),
       roundTime:Math.max(0,Math.round(this.roundTimer)), round:this.roundNum, roundsWon:this.roundsWon,
       alive:{blue:this.aliveCount('blue'),red:this.aliveCount('red')}, pot:this.pot, buyIn:BUY_IN,
-      mode:this.mode, modeName:this.modeName(), tournament:this.tournament, caps:{...this.caps}, captureTarget:CAPTURE_TARGET, tourneyWins:TOURNEY_WINS,
+      mode:this.mode, modeName:this.modeName(), tournament:this.tournament, caps:{...this.caps}, captureTarget:CAPTURE_TARGET, tourneyWins:TOURNEY_WINS, wave:this.invSession?this.invWave:0, superRound:this.superRound,
       flags:this.flags.map(fl=>({team:fl.team,x:Math.round(fl.x),y:Math.round(fl.y),home:fl.atHome,carried:!!fl.carrier})), anteOptions:ANTE_OPTIONS,
       events:events||[] };
   }
@@ -612,8 +648,8 @@ class Game {
 
 // turrets are passed to canSee as a "viewer"; give them an equip stub so concealed/canReveal work
 const _origCanSee = Game.prototype.canSee;
-Game.prototype.canSee = function(v,t){ if(v && !v.equip) v.equip={vision:'none',camo:'none'}; return _origCanSee.call(this,v,t); };
+Game.prototype.canSee = function(v,t){ if(v && !v.equip) v.equip={chips:[],wmods:[]}; return _origCanSee.call(this,v,t); };
 
-module.exports = { Game, CLASSES, CLASS_KEYS, CATALOG, CATS, WEAPONS, ARMOR, VISION, CAMO, GADGETS, AMMO,
+module.exports = { Game, BUILD, CLASSES, CLASS_KEYS, CATALOG, CATS, WEAPONS, WEAPON_MODS, ARMOR_CHIPS, GADGETS, weightCapacity, HEAVY_CLASSES, WMOD_SLOTS, CHIP_SLOTS, MAX_CAMO, BASE_AMMO, WEAPON_WT, BOT_SPLAT_REWARD,
   ARENA, TILE, SPEED_MULT, LOBBY, LOBBY_ZONES, buildObstacles, levelInfo, PLAIN, FOREST, WATER, MOUNT,
   NEW_WALLET, SPLAT_REWARD, BUY_IN, ROUND_WIN_BONUS, SURVIVOR_BONUS, SHOP_TIME, ROUND_TIME, TEAM_SIZE, CLASS_UNLOCK_LEVEL };
