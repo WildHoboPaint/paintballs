@@ -47,7 +47,7 @@ const MAXTIER=5, BOT_TIER=3, SNIPER_BLIND=160; const TIER_COST={2:600,3:1200,4:2
 const HEAVY_CLASSES=['VetTrooper','HeavyWeapons','Officer'];
 function weightCapacity(level){ return 8 + Math.floor(level/5)*2; }
 const LEVELUP_BONUS=20;                 // coins per level gained
-const BUILD='hvpb-2026.06.14.18';        // bump on each change; shown in-game to verify deploys
+const BUILD='hvpb-2026.06.14.19';        // bump on each change; shown in-game to verify deploys
 
 // progression
 const CLASS_UNLOCK_LEVEL=10, LVL_BASE=2, LVL_STEP=1;
@@ -381,10 +381,15 @@ class Game {
     this.inv[p.key]={}; this.owned[p.key]=[]; if(refund) this.addMoney(p,refund); return refund; }
   resetLoadout(id){ const p=this.players.get(id); if(!p||p.bot) return {ok:false};
     if(this.phase==='active') return {ok:false,msg:'Locked during the round.'};
-    const refund=this._refundClear(p); p.equip=this.defaultEquip(p.cls);   // sell back ALL gear/mods/chips for full refund, strip to class default weapon (keeps weapon/class tiers)
+    let refund=this._refundClear(p);   // sell back all gear / mods / chips
+    let tref=0; const wt=this.tiers[p.key]||{}; for(const wid in wt){ for(let t=2;t<=wt[wid];t++) tref+=(wid==='pball_gun'?0:(TIER_COST[t]||0)); }
+    const ct=this.classTiers[p.key]||{}; for(const cn in ct){ for(let t=2;t<=ct[cn];t++) tref+=(TIER_COST[t]||0); }
+    this.tiers[p.key]={}; this.classTiers[p.key]={};   // full respec: refund weapon + class upgrade tiers too (level/XP kept)
+    if(tref){ this.addMoney(p,tref); refund+=tref; }
+    p.equip=this.defaultEquip(p.cls);
     const st=this.stats(p); p.maxhp=st.hp; p.hp=st.hp; p.ammo=st.ammoPool; p.mineCharges=0; p.decoyCharges=0; p.hasTurret=false;
     this.emit({type:'msg',text:`${p.name} reset to default${refund?` (+${refund} refunded)`:''}.`}); this.savePrefs(p);
-    return {ok:true,money:this.getMoney(p),refund,cls:p.cls,equip:p.equip,inv:this.inv[p.key]||{},owned:this.ownedSet(p.key)}; }
+    return {ok:true,money:this.getMoney(p),refund,cls:p.cls,equip:p.equip,inv:this.inv[p.key]||{},owned:this.ownedSet(p.key),tiers:{},classTiers:{}}; }
   setAnte(id,on,amt){ const p=this.players.get(id); if(!p) return {ok:false}; p.wantAnte=!!on; if(amt!==undefined){ const a=+amt; if(ANTE_OPTIONS.includes(a)) p.anteAmt=a; } return {ok:true,wantAnte:p.wantAnte,anteAmt:p.anteAmt}; }
   setReady(id,on){ const p=this.players.get(id); if(!p) return {ok:false}; p.ready=!!on; if(p.ready) p.afkRounds=0; return {ok:true,ready:p.ready}; }
   readyCount(){ let n=0; for(const p of this.players.values()) if(p.ready!==false) n++; return n; }
