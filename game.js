@@ -47,7 +47,7 @@ const MAXTIER=5, BOT_TIER=3, SNIPER_BLIND=160; const TIER_COST={2:600,3:1200,4:2
 const HEAVY_CLASSES=['VetTrooper','HeavyWeapons','Officer'];
 function weightCapacity(level){ return 8 + Math.floor(level/5)*2; }
 const LEVELUP_BONUS=20;                 // coins per level gained
-const BUILD='hvpb-2026.06.14.16';        // bump on each change; shown in-game to verify deploys
+const BUILD='hvpb-2026.06.14.18';        // bump on each change; shown in-game to verify deploys
 
 // progression
 const CLASS_UNLOCK_LEVEL=10, LVL_BASE=2, LVL_STEP=1;
@@ -67,7 +67,7 @@ const CLASSES = {
                 weapons:['minigun','bazooka','grenade_launcher','shotgun','pball_rifle'], gear:['mine'],
                 desc:"Walking tank. Minigun & bazooka, heavy armor." },
   Scout:      { hp:80,  speed:240, color:'#9b5de5', defWeapon:'auto_pistol',
-                weapons:['auto_pistol','pball_gun'], gear:['jetpack','mine'],
+                weapons:['pest_control','auto_pistol','pball_gun'], gear:['jetpack','mine'],
                 desc:"Fast recon. Vision gear & jetpack." },
   Infiltrator:{ hp:90,  speed:205, color:'#06d6a0', defWeapon:'blowgun',
                 weapons:['blowgun','auto_pistol','pball_gun'], gear:['mine','decoy'],
@@ -96,6 +96,7 @@ const WEAPONS = {
   shotgun:      { name:"Shotgun",          cost:800,  dmg:1, fireRate:1000, spread:0.32, mag:15, range:190, reload:1.9, proj:3, desc:"3-pellet spread, very short range." },
   blowgun:      { name:"Blowgun",          cost:600,  dmg:1, fireRate:880, spread:0.025,mag:20, range:360, reload:1.5, proj:1, silent:true, desc:"Silent darts, medium range." },
   auto_pistol:  { name:"Auto Pistol",      cost:500,  dmg:1, fireRate:480, spread:0.05, mag:20, range:250, reload:1.2, proj:1, desc:"Quick, light, short range." },
+  pest_control: { name:"Pest Control",     cost:0,    dmg:1, fireRate:300, spread:0,    mag:999,range:66,  reload:0.1, proj:1, melee:true, desc:"Scout melee swatter. Lethal point-blank, useless at range. No ammo, no reload." },
 };
 const WEAPON_MODS = {
   magazine: { name:"Magazine",    cost:900,  wt:2, ammo:30, desc:"+30 paintballs to your round pool." },
@@ -120,7 +121,10 @@ const GADGETS = {
   jetpack:{ name:"Jetpack",    cost:1500, passive:true, desc:"Ignore terrain slowdown (passive)." },
   decoy:  { name:"Decoy",      cost:400,  charges:2, desc:"Press G to drop a fake clone (2/round)." },
 };
-const CATALOG = { weapon:WEAPONS, wmod:WEAPON_MODS, chip:ARMOR_CHIPS, gadget:GADGETS };
+const AMMO = {
+  fast: { name:"Fast Paint", cost:700, shots:75, speedMul:1.8, color:'#ef4444', desc:"Paint flies much faster, harder to dodge. Consumable (~3 clips), then rebuy." },
+};
+const CATALOG = { weapon:WEAPONS, wmod:WEAPON_MODS, chip:ARMOR_CHIPS, gadget:GADGETS, ammo:AMMO };
 const CATS = Object.keys(CATALOG);
 
 // special ammo is consumable: a purchase grants this many shots, then you must rebuy
@@ -175,6 +179,8 @@ class Game {
     this.classTiers=(saved&&saved.classTiers)?Object.assign({},saved.classTiers):{};   // account key -> { className: tier }
     this.prefs=(saved&&saved.prefs)?Object.assign({},saved.prefs):{};   // account key -> { cls, equip, modeVotes } (persist across logins)
     this.waveRecord=(saved&&saved.waveRecord)?saved.waveRecord:{wave:0,name:''};   // highest Bot Invaders wave + who reached it
+    this.ammoStock=(saved&&saved.ammoStock)?Object.assign({},saved.ammoStock):{};   // key -> { fast: shots } consumable special ammo
+    this.lifeStats=(saved&&saved.lifeStats)?Object.assign({},saved.lifeStats):{};   // key -> { splats, psplats, shots, name } permanent leaderboard
     this.inv=(saved&&saved.inv)?Object.assign({},saved.inv):{};         // account key -> { 'wmod:scope':2, 'chip:camo':1 }
     if(!(saved&&saved.inv)){ for(const k in this.owned){ for(const s of (this.owned[k]||[])){ if(s.indexOf('wmod:')===0||s.indexOf('chip:')===0){ (this.inv[k]||(this.inv[k]={}))[s]=1; } } } }
     this.owned  =(saved&&saved.owned)  ?Object.assign({},saved.owned)  :{};   // key -> ["weapon:assault_rifle", ...]
@@ -198,7 +204,7 @@ class Game {
     if(cat==='wmod'||cat==='chip') return (((this.inv[p.key]||{})[cat+':'+id])||0)>0;
     return this.ownedSet(p.key).includes(cat+':'+id); }
   invCount(p,catid){ return ((this.inv[p.key]||{})[catid])||0; }
-  serialize(){ return { wallets:this.wallets, owned:this.owned, xp:this.xp, accounts:this.accounts, tiers:this.tiers, inv:this.inv, classTiers:this.classTiers, prefs:this.prefs, waveRecord:this.waveRecord }; }
+  serialize(){ return { wallets:this.wallets, owned:this.owned, xp:this.xp, accounts:this.accounts, tiers:this.tiers, inv:this.inv, classTiers:this.classTiers, prefs:this.prefs, waveRecord:this.waveRecord, ammoStock:this.ammoStock, lifeStats:this.lifeStats }; }
   savePrefs(p){ if(!p||p.bot||!p.key) return; this.prefs[p.key]={ cls:p.cls, equip:{weapon:p.equip.weapon,wmods:(p.equip.wmods||[]).slice(),chips:(p.equip.chips||[]).slice(),gadget:p.equip.gadget}, modeVotes:Object.assign({},p.modeVotes||{}) }; }
   restorePrefs(f){ const pr=this.prefs[f.key]; if(!pr) return;
     if(pr.cls && CLASSES[pr.cls] && this.getLevel(f)>=(CLASS_UNLOCK[pr.cls]||1)) f.cls=pr.cls;
@@ -210,7 +216,7 @@ class Game {
     const gad=(e.gadget&&CATALOG.gadget[e.gadget]&&this.owns(f,'gadget',e.gadget)&&this.canEquip(f,'gadget',e.gadget))?e.gadget:'none';
     const cap=weightCapacity(this.getLevel(f));
     while(this.stats({cls:f.cls,equip:{weapon:f.equip.weapon,wmods,chips,gadget:gad}}).weight>cap && (chips.length||wmods.length)){ if(chips.length) chips.pop(); else wmods.pop(); }
-    f.equip={weapon:f.equip.weapon,wmods,chips,gadget:gad};
+    f.equip={weapon:f.equip.weapon,wmods,chips,gadget:gad,ammo:'none'};
     f.mineCharges=(GADGETS[gad]&&GADGETS[gad].charges)||0; f.decoyCharges=gad==='decoy'?GADGETS.decoy.charges:0; }
   tierOf(p,wid){ if(p.bot) return BOT_TIER; const m=this.tiers[p.key]; return (m&&m[wid])||1; }
   upgradeWeapon(id,wid){ const p=this.players.get(id); if(!p||p.bot) return {ok:false}; if(this.phase==='active') return {ok:false,msg:'Locked during the round.'}; if(!WEAPONS[wid]) return {ok:false,msg:'no such weapon'};
@@ -259,13 +265,13 @@ class Game {
     const _ct=this.classTierOf(p); let _spd=cls.speed*SPEED_SCALE;
     if(p.cls==='Scout') _spd*=(1+(_ct-1)*0.10); else if(p.cls==='Infiltrator') _spd*=(1+(_ct-1)*0.07);
     return { hp:1, speed:_spd, color:cls.color, deflect:Math.min(0.8,deflect),
-      dmg:1, fireRate, spread, mag, reload, proj, range, splash:w.splash||0, pspeed:w.pspeed||BALL_SPEED, scope:!!w.scope, lob:!!w.lob,
+      dmg:1, fireRate, spread, mag, reload, proj, range, splash:w.splash||0, pspeed:w.pspeed||BALL_SPEED, scope:!!w.scope, lob:!!w.lob, melee:!!w.melee,
       ammoMul, ammoPool, golden, reveal, sat, camoN:Math.min(MAX_CAMO,camoN), weight, jetpack:jet };
   }
 
   // ---- spawning ----
   teamSpawn(team){ const yr=()=>rand(120,ARENA.h-120); return team==='blue'?{x:rand(80,180),y:yr()}:{x:rand(ARENA.w-180,ARENA.w-80),y:yr()}; }
-  defaultEquip(cls){ return { weapon:CLASSES[cls].defWeapon, gadget:'none', wmods:[], chips:[] }; }
+  defaultEquip(cls){ return { weapon:CLASSES[cls].defWeapon, gadget:'none', wmods:[], chips:[], ammo:'none' }; }
   newFighter(team,cls,isBot){
     const s=this.teamSpawn(team);
     const f={ id:this.nextId++, bot:!!isBot, team, cls, x:s.x,y:s.y,r:14,aim:team==='blue'?0:Math.PI,
@@ -332,6 +338,9 @@ class Game {
     const [cat,item]=String(catid).split(':'); const def=CATALOG[cat]&&CATALOG[cat][item];
     if(!def) return {ok:false,msg:'no such item'};
     if(!this.canEquip(p,cat,item)) return {ok:false,money:this.getMoney(p),msg:`${p.cls} can't use that`};
+    if(cat==='ammo'){ if(this.getMoney(p)<def.cost) return {ok:false,money:this.getMoney(p),msg:'not enough Paint Coins'};
+      this.addMoney(p,-def.cost); const s=this.ammoStock[p.key]||(this.ammoStock[p.key]={}); s[item]=(s[item]||0)+(def.shots||0);
+      this.emit({type:'msg',text:`${p.name} bought ${def.name}.`}); return {ok:true,money:this.getMoney(p),ammoStock:s,msg:`Bought ${def.name} (+${def.shots})`}; }
     if(cat==='wmod'||cat==='chip'){ const cap=cat==='wmod'?WMOD_SLOTS:CHIP_SLOTS; const inv=this.inv[p.key]||(this.inv[p.key]={}); const have=inv[catid]||0;
       if(have>=cap) return {ok:false,money:this.getMoney(p),inv,msg:`Max ${cap} owned`};
       if(this.getMoney(p)<def.cost) return {ok:false,money:this.getMoney(p),inv,msg:'not enough Paint Coins'};
@@ -359,7 +368,8 @@ class Game {
     const probe={cls:p.cls,equip:{weapon:wid,wmods,chips,gadget:gad}};
     const wt=this.stats(probe).weight, cap=weightCapacity(this.getLevel(p));
     if(wt>cap) return {ok:false,msg:`Too heavy: ${wt}/${cap} — level up for more capacity.`,weight:wt,cap};
-    p.equip={weapon:wid,wmods,chips,gadget:gad};
+    const ammoSel=(ld.ammo==='fast')?'fast':'none';
+    p.equip={weapon:wid,wmods,chips,gadget:gad,ammo:ammoSel};
     const st=this.stats(p); p.maxhp=st.hp; if(this.phase!=='active') p.hp=Math.min(p.hp,st.hp); p.ammo=Math.min(p.ammo,st.ammoPool);
     p.mineCharges=(GADGETS[gad]&&GADGETS[gad].charges)||0; p.decoyCharges=gad==='decoy'?GADGETS.decoy.charges:0;
     this.savePrefs(p);
@@ -371,13 +381,18 @@ class Game {
     this.inv[p.key]={}; this.owned[p.key]=[]; if(refund) this.addMoney(p,refund); return refund; }
   resetLoadout(id){ const p=this.players.get(id); if(!p||p.bot) return {ok:false};
     if(this.phase==='active') return {ok:false,msg:'Locked during the round.'};
-    p.equip=this.defaultEquip(p.cls);   // revert equipped gear to the class starter; KEEP everything owned (re-equip anytime), coins untouched
+    const refund=this._refundClear(p); p.equip=this.defaultEquip(p.cls);   // sell back ALL gear/mods/chips for full refund, strip to class default weapon (keeps weapon/class tiers)
     const st=this.stats(p); p.maxhp=st.hp; p.hp=st.hp; p.ammo=st.ammoPool; p.mineCharges=0; p.decoyCharges=0; p.hasTurret=false;
-    this.emit({type:'msg',text:`${p.name} reset their loadout to default.`}); this.savePrefs(p);
-    return {ok:true,money:this.getMoney(p),refund:0,cls:p.cls,equip:p.equip,inv:this.inv[p.key]||{},owned:this.ownedSet(p.key)}; }
+    this.emit({type:'msg',text:`${p.name} reset to default${refund?` (+${refund} refunded)`:''}.`}); this.savePrefs(p);
+    return {ok:true,money:this.getMoney(p),refund,cls:p.cls,equip:p.equip,inv:this.inv[p.key]||{},owned:this.ownedSet(p.key)}; }
   setAnte(id,on,amt){ const p=this.players.get(id); if(!p) return {ok:false}; p.wantAnte=!!on; if(amt!==undefined){ const a=+amt; if(ANTE_OPTIONS.includes(a)) p.anteAmt=a; } return {ok:true,wantAnte:p.wantAnte,anteAmt:p.anteAmt}; }
   setReady(id,on){ const p=this.players.get(id); if(!p) return {ok:false}; p.ready=!!on; if(p.ready) p.afkRounds=0; return {ok:true,ready:p.ready}; }
   readyCount(){ let n=0; for(const p of this.players.values()) if(p.ready!==false) n++; return n; }
+  statBucket(p){ if(!p.key) return {splats:0,psplats:0,shots:0,name:p.name}; const b=this.lifeStats[p.key]||(this.lifeStats[p.key]={splats:0,psplats:0,shots:0,name:p.name}); b.name=p.name; return b; }
+  leaderboard(){ const arr=Object.values(this.lifeStats);
+    const top=(fn)=> arr.map(s=>({name:s.name||'?',val:fn(s)})).filter(x=>x.val>0).sort((a,b)=>b.val-a.val).slice(0,5);
+    return { splats:top(s=>s.splats||0), psplats:top(s=>s.psplats||0),
+      accuracy: arr.filter(s=>(s.shots||0)>=20).map(s=>({name:s.name||'?',val:Math.round(100*(s.splats||0)/(s.shots||1)),splats:s.splats||0,shots:s.shots||0})).filter(x=>x.val>0).sort((a,b)=>b.val-a.val).slice(0,5) }; }
   classTierOf(p){ if(p.bot) return 1; const m=this.classTiers[p.key]; return (m&&m[p.cls])||1; }
   upgradeClass(id){ const p=this.players.get(id); if(!p||p.bot) return {ok:false}; if(this.phase==='active') return {ok:false,msg:'Locked during the round.'};
     if(!['Sniper','Scout','Infiltrator'].includes(p.cls)) return {ok:false,msg:'No class upgrade for this class yet'};
@@ -398,9 +413,13 @@ class Game {
   startReload(f){ if(!f||!f.alive||f.reloading) return; const st=this.stats(f); if((f.clip==null?st.mag:f.clip)>=st.mag) return; const unlimited=(this.mode==='invaders')||f.bot; if(!unlimited && f.ammo<=0) return; f.reloading=true; f.reloadT=st.reload||1.5; }
   fire(f){
     if(!f.alive||f.cool>0||f.reloading) return;
+    const st=this.stats(f);
+    if(st.melee){ f.cool=st.fireRate/1000; f.firedT=this.clock; if(!f.bot && f.key) this.statBucket(f).shots++;   // Scout melee: instant short-range hit, no ammo / no reload
+      this.emit({type:'melee',x:Math.round(f.x),y:Math.round(f.y),a:+f.aim.toFixed(2),team:f.team});
+      let best=null,bd=1e9; for(const e of [...this.players.values(),...this.bots]){ if(!e.alive||e.team===f.team) continue; const d=Math.hypot(e.x-f.x,e.y-f.y); if(d<=st.range+(e.r||14) && d<bd){ bd=d; best=e; } }
+      if(best) this.applyDamage(best,1,f,false); return; }
     const unlimited=(this.mode==='invaders')||f.bot;
     if(!unlimited && f.ammo<=0) return;                          // dry: round pool spent (refills next round)
-    const st=this.stats(f);
     if(f.clip==null) f.clip=st.mag;
     if(f.clip<=0){ this.startReload(f); return; }                // empty magazine -> reload before firing
     const wdef=WEAPONS[f.equip.weapon]||WEAPONS[CLASSES[f.cls].defWeapon];
@@ -408,7 +427,10 @@ class Game {
     f.cool=st.fireRate/1000; f.firedT=this.clock;
     const cost = useGolden?1:(st.ammoMul||1); if(!unlimited) f.ammo=Math.max(0,f.ammo-cost);
     f.clip=Math.max(0,f.clip-1); if(f.clip<=0) this.startReload(f);   // spend a round from the magazine; auto-reload when empty
+    if(!f.bot && f.key) this.statBucket(f).shots++;   // accuracy tracking (per trigger pull)
+    let useFast=false; if(f.equip.ammo==='fast' && !f.bot && f.key){ const s=this.ammoStock[f.key]; if(s && (s.fast||0)>0){ s.fast--; useFast=true; } }
     let pf=st.scope, lob=st.lob, range=st.range, proj=st.proj, bspeed=st.pspeed, col=paintColor(wdef,'normal'), splash=st.splash;
+    if(useFast){ bspeed*=AMMO.fast.speedMul; col=AMMO.fast.color; }
     if(useGolden){ f.goldenArmed=false; f.goldenCD=GOLDEN_CD; range=wdef.range*2.5; bspeed=210; col='#ffd700'; pf=true; lob=false; proj=1; splash=0; this.emit({type:'golden',x:Math.round(f.x),y:Math.round(f.y)}); }
     const reach=Math.min(range, (f.input&&f.input.aimDist>0)?f.input.aimDist:range);  // shoot short if you aim short
     for(let i=0;i<proj;i++){
@@ -435,16 +457,9 @@ class Game {
     const mul=this.doubleRewards?2:1; const base=target.bot?BOT_SPLAT_REWARD:SPLAT_REWARD;
     const rew=(attacker&&!attacker.bot&&!this.tournament)?base*mul:0, xpg=(attacker&&!attacker.bot)?((this.tournament?2:1)*mul):0;
     this.emit({type:'elim',byId:attacker?attacker.id:0,by:attacker?attacker.name:'?',byTeam:attacker?attacker.team:'',vtId:target.id,vt:target.name,vtTeam:target.team, rew, xp:xpg});
-    if(attacker){ attacker.kills++; attacker.roundKills=(attacker.roundKills||0)+1; if(!attacker.bot){ if(rew) this.addMoney(attacker,rew); if(xpg) this.gainXp(attacker,xpg); } }
+    if(attacker){ attacker.kills++; attacker.roundKills=(attacker.roundKills||0)+1; if(!attacker.bot){ if(attacker.key){ const sb=this.statBucket(attacker); sb.splats++; if(!target.bot) sb.psplats++; } if(rew) this.addMoney(attacker,rew); if(xpg) this.gainXp(attacker,xpg); } }
     if(target.bot && target.golden && !this.superRound){ this.superNext=true; this.goldenEnded=true; this.emit({type:'goldenbot',by:attacker?attacker.name:'?'}); }
   }
-  finishDown(f){ if(!f.downed) return; f.downed=false; f.alive=false; f.deaths++; const attacker=f._downer; f._downer=null;
-    if(this.mode==='ctf'){ for(const fl of this.flags) if(fl.carrier===f.id){ fl.carrier=null; fl.atHome=false; fl.dropT=20; fl.x=f.x; fl.y=f.y; } }
-    this.emit({type:'splat',x:f.x,y:f.y,c:attacker?CLASSES[attacker.cls].color:'#fff'});
-    const mul=this.doubleRewards?2:1; const base=SPLAT_REWARD;
-    const rew=(attacker&&!attacker.bot&&!this.tournament)?base*mul:0, xpg=(attacker&&!attacker.bot)?((this.tournament?2:1)*mul):0;
-    this.emit({type:'elim',byId:attacker?attacker.id:0,by:attacker?attacker.name:'?',byTeam:attacker?attacker.team:'',vtId:f.id,vt:f.name,vtTeam:f.team, rew, xp:xpg});
-    if(attacker){ attacker.kills++; attacker.roundKills=(attacker.roundKills||0)+1; if(!attacker.bot){ if(rew) this.addMoney(attacker,rew); if(xpg) this.gainXp(attacker,xpg); } } }
   splashDamage(x,y,radius,team,attacker,color){
     this.emit({type:'splash',x:Math.round(x),y:Math.round(y),r:Math.round(radius),c:color||(attacker?CLASSES[attacker.cls].color:'#ffd166')});
     for(const f of [...this.players.values(),...this.bots]){ if(!f.alive||f.team===team) continue;
@@ -617,9 +632,9 @@ class Game {
     let mvx=0,mvy=0; const tgt=ai.target;
     if(tgt){ const dx=tgt.x-f.x,dy=tgt.y-f.y,d=Math.hypot(dx,dy)||1;
       if(d>f.r+10){ mvx+=dx/d; mvy+=dy/d; }                            // close the distance
-      ai.jitter-=dt; if(ai.jitter<=0){ ai.strafe*=-1; ai.jitter=rand(0.3,1.0); ai.strafeAmt=(Math.random()<0.3? rand(1.1,1.6) : rand(0.2,0.6)); }   // mostly mild, occasional big juke
+      ai.jitter-=dt; if(ai.jitter<=0){ ai.strafe*=-1; ai.jitter=rand(0.25,0.85); ai.strafeAmt=(Math.random()<0.4? rand(1.2,1.7) : rand(0.45,0.9)); }   // more side-to-side: stronger base weave + more frequent jukes
       const sAmt=ai.strafeAmt||0.5; mvx+=-dy/d*ai.strafe*sAmt; mvy+=dx/d*ai.strafe*sAmt;     // varied strafe amplitude
-      ai.wander+=rand(-1,1)*dt*3.0; mvx+=Math.cos(ai.wander)*0.28; mvy+=Math.sin(ai.wander)*0.28;   // light wander so it's not a straight magnet
+      ai.wander+=rand(-1,1)*dt*3.2; mvx+=Math.cos(ai.wander)*0.34; mvy+=Math.sin(ai.wander)*0.34;   // wander so it's not a straight magnet
       f.aim=Math.atan2((seen||tgt).y-f.y,(seen||tgt).x-f.x);
     } else { const cx=ARENA.w/2, cy=ARENA.h/2, dx=cx-f.x, dy=cy-f.y, d=Math.hypot(dx,dy)||1;   // nobody left -> head to center
       if(d>60){ mvx=dx/d; mvy=dy/d; } else { mvx=Math.cos(ai.wander); mvy=Math.sin(ai.wander); ai.wander+=rand(-1,1)*dt; } f.aim=Math.atan2(dy,dx); }
@@ -736,10 +751,10 @@ class Game {
     let you=null;
     if(me){ const st=this.stats(me); const li=levelInfo(this.getXp(me));
       you={ id:me.id,name:me.name,cls:me.cls,team:me.team,hp:Math.max(0,Math.round(me.hp)),maxhp:me.maxhp,alive:me.alive,downed:!!me.downed,downFrac:(me.downed?Math.max(0,Math.min(1,me.downT/LAST_GASP)):0),
-        ammo:(this.mode==='invaders'?-1:me.ammo),mag:st.ammoPool,clip:(me.clip==null?st.mag:me.clip),clipMax:st.mag,reloading:!!me.reloading,reloadFrac:(me.reloading&&st.reload>0?Math.max(0,Math.min(1,1-me.reloadT/st.reload)):1),kills:me.kills,deaths:me.deaths,money:this.getMoney(me),
+        ammo:(this.mode==='invaders'?-1:me.ammo),mag:st.ammoPool,clip:(me.clip==null?st.mag:me.clip),clipMax:st.mag,melee:!!st.melee,reloading:!!me.reloading,reloadFrac:(me.reloading&&st.reload>0?Math.max(0,Math.min(1,1-me.reloadT/st.reload)):1),kills:me.kills,deaths:me.deaths,money:this.getMoney(me),
         x:Math.round(me.x),y:Math.round(me.y),terrain:this.terrainCode(me.x,me.y),wantAnte:me.wantAnte,anteIn:me.anteIn,
         level:li.level, xpInto:li.into, xpNeed:li.need, unlockLevel:CLASS_UNLOCK_LEVEL, classUnlocked:li.level>=CLASS_UNLOCK_LEVEL,
-        deflect:st.deflect, zone:me.zone||null, equip:me.equip, owned:this.ownedSet(me.key), inv:this.inv[me.key]||{}, mineCharges:me.mineCharges, hasTurret:me.hasTurret, gadget:me.equip.gadget, weight:st.weight, weightCap:weightCapacity(li.level), golden:st.golden, goldenReady:(me.goldenCD||0)<=0, goldenArmed:!!me.goldenArmed, anteAmt:me.anteAmt||100, wantAnte:me.wantAnte, ready:me.ready!==false, modeVotes:me.modeVotes||{}, tiers:this.tiers[me.key]||{}, classTiers:this.classTiers[me.key]||{}, classTier:this.classTierOf(me), spd:Math.round(st.speed*(me.equip.gadget==='jetpack'?1:(SPEED_MULT[this.terrainCode(me.x,me.y)]||1))) }; }
+        deflect:st.deflect, zone:me.zone||null, equip:me.equip, owned:this.ownedSet(me.key), inv:this.inv[me.key]||{}, fastAmmo:((this.ammoStock[me.key]||{}).fast||0), ammoSel:(me.equip.ammo||'none'), mineCharges:me.mineCharges, hasTurret:me.hasTurret, gadget:me.equip.gadget, weight:st.weight, weightCap:weightCapacity(li.level), golden:st.golden, goldenReady:(me.goldenCD||0)<=0, goldenArmed:!!me.goldenArmed, anteAmt:me.anteAmt||100, wantAnte:me.wantAnte, ready:me.ready!==false, modeVotes:me.modeVotes||{}, tiers:this.tiers[me.key]||{}, classTiers:this.classTiers[me.key]||{}, classTier:this.classTierOf(me), spd:Math.round(st.speed*(me.equip.gadget==='jetpack'?1:(SPEED_MULT[this.terrainCode(me.x,me.y)]||1))) }; }
     let stage=null; if(lobby){ stage=this.stageRect(); stage.zones=this.stageZones(stage); stage.record=this.waveRecord; }
     return { t:'state', you, fighters:out, radar, balls:this.balls.map(b=>({x:Math.round(b.x),y:Math.round(b.y),c:b.color})),
       turrets, mines, decoys, space:'arena', stage, phase:this.phase, phaseTimer:Math.max(0,Math.round(this.phaseTimer)),
@@ -755,6 +770,6 @@ class Game {
 const _origCanSee = Game.prototype.canSee;
 Game.prototype.canSee = function(v,t){ if(v && !v.equip) v.equip={chips:[],wmods:[]}; return _origCanSee.call(this,v,t); };
 
-module.exports = { Game, BUILD, CLASSES, CLASS_KEYS, CATALOG, CATS, WEAPONS, WEAPON_MODS, ARMOR_CHIPS, GADGETS, weightCapacity, HEAVY_CLASSES, WMOD_SLOTS, CHIP_SLOTS, MAX_CAMO, BASE_AMMO, WEAPON_WT, BOT_SPLAT_REWARD,
+module.exports = { Game, BUILD, CLASSES, CLASS_KEYS, CATALOG, CATS, WEAPONS, WEAPON_MODS, ARMOR_CHIPS, GADGETS, AMMO, weightCapacity, HEAVY_CLASSES, WMOD_SLOTS, CHIP_SLOTS, MAX_CAMO, BASE_AMMO, WEAPON_WT, BOT_SPLAT_REWARD,
   ARENA, TILE, SPEED_MULT, LOBBY, LOBBY_ZONES, buildObstacles, levelInfo, PLAIN, FOREST, WATER, MOUNT,
   NEW_WALLET, SPLAT_REWARD, BUY_IN, ROUND_WIN_BONUS, SURVIVOR_BONUS, SHOP_TIME, ROUND_TIME, TEAM_SIZE, CLASS_UNLOCK_LEVEL, CLASS_UNLOCK };

@@ -97,6 +97,15 @@
   .anteBtn{border:none; border-radius:8px; padding:9px 16px; font-weight:800; cursor:pointer; font-family:inherit; font-size:14px}
   .anteOn{background:#2c9c4a; color:#fff} .anteOff{background:#26313d; color:#cfe0ee}
   #rbanner{position:absolute; top:32%; left:50%; transform:translateX(-50%); text-align:center; font-weight:900; font-size:clamp(34px,6vw,52px); letter-spacing:2px; text-shadow:0 3px 16px #000; z-index:18; pointer-events:none}
+  /* leaderboard */
+  .lbgrid{display:grid; grid-template-columns:repeat(3,1fr); gap:12px}
+  .lbcol{background:#0f1620; border:1px solid #243140; border-radius:12px; padding:12px}
+  .lbh{font-weight:800; font-size:14px; color:var(--accent); margin-bottom:8px; text-align:center; border-bottom:1px solid #243140; padding-bottom:7px}
+  .lbrow{display:flex; align-items:center; gap:8px; padding:5px 2px; font-size:13px}
+  .lbrk{color:#8aa0b3; font-weight:800; width:16px}
+  .lbn{flex:1; color:#e6edf3; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  .lbv{color:#ffd166; font-weight:800}
+  @media(max-width:560px){ .lbgrid{grid-template-columns:1fr} }
   /* loadout redesign */
   .ldsum{grid-column:1/-1; background:#0c141d; border:1px solid #243140; border-radius:10px; padding:9px 13px; font-size:13px; color:#cfe0ee; display:flex; gap:7px; align-items:center; flex-wrap:wrap}
   .ldsum .ldk{color:#8aa0b3; font-weight:800; letter-spacing:.5px; text-transform:uppercase; font-size:10px; background:#16202b; padding:2px 7px; border-radius:6px}
@@ -154,11 +163,16 @@
       <span><i class="sw" style="background:#245f7e"></i>Water (slow)</span>
       <span><i class="sw" style="background:#6f6657"></i>Mountain (see all)</span>
     </div>
-    <div class="keys"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> move · <kbd>Mouse</kbd> aim · <kbd>Click</kbd> fire · <kbd>R</kbd> reload · <kbd>G</kbd> deploy gadget · <kbd>B</kbd> loadout</div>
+    <div class="keys"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> move · <kbd>Mouse</kbd> aim · <kbd>Click</kbd> fire · <kbd>R</kbd> reload · <kbd>G</kbd> deploy gadget · <kbd>B</kbd> loadout · <kbd>L</kbd> leaderboard</div>
     <div style="margin-top:12px"><a id="advToggle" style="color:#5f7488; font-size:12px; cursor:pointer; text-decoration:underline">⚙ Connect to a different server</a></div>
     <div class="row hidden" id="advRow" style="margin-top:8px"><input id="serverIn" class="txt" style="width:min(320px,90vw)" placeholder="ws://localhost:3000"></div>
   </div>
 
+  <div id="leaderboard" class="panel hidden"><div class="box" style="max-width:740px">
+    <div class="hdrow"><div><h2>🏆 Top 5 Leaderboard</h2><div class="muted">All-time stats, saved across sessions</div></div></div>
+    <div id="lbgrid" class="lbgrid"></div>
+    <div class="row" style="margin-top:16px"><button class="btn ghost" id="lbClose">Close</button></div>
+  </div></div>
   <div id="shop" class="panel hidden">
     <div class="box">
       <div class="hdrow">
@@ -212,7 +226,7 @@ let ter=null, terMini=null; const keys={}, mouse={x:0,y:0,down:false}; let reloa
 let shopOpenedBy=null, activeTab='class', myLoadout=null, loadCfg=null, classUnlock=null;
 let lastBuy=null, pendingClass=null;
 let lobby=null, lobbyCanvas=null, freeCam={x:0,y:0}, storeCats=null;
-let actx=null, muted=false, prevAmmo=null, prevClip=null, prevDowned=false, bannerT=null; let peek=false; let myPos=null; let chat=[]; const CLIENT_BUILD='hvpb-2026.06.14.16';
+let actx=null, muted=false, prevAmmo=null, prevClip=null, prevDowned=false, bannerT=null; let peek=false; let myPos=null; let chat=[]; const CLIENT_BUILD='hvpb-2026.06.14.18';
 function aud(){ if(!actx){ try{ actx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } return actx; }
 function blip(type,freq,dur,vol,ramp){ if(muted) return; const a=aud(); if(!a) return; try{ const o=a.createOscillator(),g=a.createGain(); o.type=type; o.frequency.value=freq; if(ramp) o.frequency.exponentialRampToValueAtTime(Math.max(30,freq+ramp),a.currentTime+dur); g.gain.value=vol; g.gain.exponentialRampToValueAtTime(0.0001,a.currentTime+dur); o.connect(g); g.connect(a.destination); o.start(); o.stop(a.currentTime+dur); }catch(e){} }
 const sfx={
@@ -227,7 +241,7 @@ const sfx={
 function showBanner(text,color){ const b=$('rbanner'); b.textContent=text; b.style.color=color; b.classList.remove('hidden'); clearTimeout(bannerT); bannerT=setTimeout(()=>b.classList.add('hidden'),3000); }
 function addSplashBlob(x,y,r,c){ for(let i=0;i<10;i++){ const a=Math.random()*6.28,d=Math.random()*r*0.8; splats.push({x:x+Math.cos(a)*d,y:y+Math.sin(a)*d,r:r*(0.25+Math.random()*0.25),c,al:.4+Math.random()*0.25}); } if(splats.length>1200) splats.splice(0,splats.length-1200); }
 const TC=['#2f6b32','#1d4a22','#245f7e','#6f6657'];
-const TAB_LABELS={class:'Class',weapon:'Weapon',mods:'Weapon Mods',armor:'Armor Chips',gadget:'Gadget',modes:'Modes'};
+const TAB_LABELS={class:'Class',weapon:'Weapon',mods:'Weapon Mods',armor:'Armor Chips',gadget:'Gadget',ammo:'Ammo',modes:'Modes'};
 const MODE_NAMES={tdm:'Team Deathmatch',ctf:'Capture the Flag',invaders:'Bot Invaders'};
 const CLS_COLORS={Trooper:'#cbd5e1',VetTrooper:'#7dd3fc',HeavyWeapons:'#ff8c42',Scout:'#9b5de5',Infiltrator:'#06d6a0',Sniper:'#ef476f',Engineer:'#ffd166',Officer:'#3da9fc'};
 
@@ -235,6 +249,7 @@ addEventListener('keydown',e=>{ if(e.target && (e.target.id==='chatInput'||e.tar
   if(connected && k==='enter'){ e.preventDefault(); const ci=$('chatInput'); if(ci) ci.focus(); return; }
   if(k==='r') reloadFlag=true; if(k==='g') deployFlag=true;
   if(connected && k==='b') toggleShop('manual');
+  if(connected && k==='l') toggleLeaderboard();
   if(connected && k==='e' && snap && snap.you && snap.you.zone && $('shop').classList.contains('hidden')) openStore(snap.you.zone);
   if(k==='m'){ muted=!muted; toast(muted?'🔇 sound off':'🔊 sound on'); }
   if(connected && (k==='tab'||k==='v')){ peek=!peek; setPeekBtn(); toast(peek?'🔍 Pan mode ON, move mouse to look around':'Pan mode off'); }
@@ -285,7 +300,7 @@ function onMsg(m){
     if(m.events) for(const ev of m.events) handleEvent(ev); }
   else if(m.t==='authfail'){ $('status').textContent='⚠ '+(m.msg||'Login failed'); try{ws.close();}catch(e){} connected=false; }
   else if(m.t==='chat'){ chat.push({from:m.from,team:m.team,text:m.text,t:14}); if(chat.length>10) chat.shift(); }
-  else if(m.t==='buyresult'){ if(m.money!=null) $('shopWallet').textContent=m.money; if(m.owned&&snap&&snap.you) snap.you.owned=m.owned; if(m.inv&&snap&&snap.you) snap.you.inv=m.inv; if(m.msg) toast(m.ok?('✅ '+m.msg):('❌ '+m.msg)); if(m.ok&&lastBuy) autoEquipBought(lastBuy); lastBuy=null; if(!$('shop').classList.contains('hidden')){buildTabs();buildGrid();updateShopLive();} }
+  else if(m.t==='buyresult'){ if(m.money!=null) $('shopWallet').textContent=m.money; if(m.owned&&snap&&snap.you) snap.you.owned=m.owned; if(m.inv&&snap&&snap.you) snap.you.inv=m.inv; if(m.ammoStock&&snap&&snap.you) snap.you.fastAmmo=m.ammoStock.fast||0; if(m.msg) toast(m.ok?('✅ '+m.msg):('❌ '+m.msg)); if(m.ok&&lastBuy) autoEquipBought(lastBuy); lastBuy=null; if(!$('shop').classList.contains('hidden')){buildTabs();buildGrid();updateShopLive();} }
   else if(m.t==='loadresult'){ if(m.money!=null) $('shopWallet').textContent=m.money; if(!m.ok){ toast('❌ '+(m.msg||'invalid loadout')); syncLoadout(); } if(!$('shop').classList.contains('hidden')){buildTabs();buildGrid();updateShopLive();} }
   else if(m.t==='classresult'){ if(m.money!=null) $('shopWallet').textContent=m.money;
     if(!m.ok){ if(m.msg) toast('❌ '+m.msg); }
@@ -296,10 +311,12 @@ function onMsg(m){
   else if(m.t==='upgraderesult'){ if(m.money!=null) $('shopWallet').textContent=m.money; if(m.tiers&&snap&&snap.you) snap.you.tiers=m.tiers; if(m.msg) toast(m.ok?('✅ '+m.msg):('❌ '+m.msg)); if(!$('shop').classList.contains('hidden')){buildGrid();} }
   else if(m.t==='classupresult'){ if(m.money!=null) $('shopWallet').textContent=m.money; if(m.classTiers&&snap&&snap.you) snap.you.classTiers=m.classTiers; if(m.msg) toast(m.ok?('✅ '+m.msg):('❌ '+m.msg)); if(!$('shop').classList.contains('hidden')){buildGrid();} }
   else if(m.t==='pong'){ pingMs=Math.max(0,Math.round(performance.now()-m.ts)); const d=$('pingv'); if(d){ d.textContent='ping '+pingMs+' ms'; d.style.color=pingMs<80?'#5b8c5b':(pingMs<160?'#caa44a':'#c46a6a'); } }
+  else if(m.t==='leaderboard'){ renderLeaderboard(m); }
 }
 function handleEvent(ev){
   if(ev.type==='splat') addSplat(ev.x,ev.y,ev.c);
   else if(ev.type==='splash'){ addSplashBlob(ev.x,ev.y,ev.r,ev.c); sfx.boom(); }
+  else if(ev.type==='melee'){ addSplashBlob(ev.x+Math.cos(ev.a)*40, ev.y+Math.sin(ev.a)*40, 15, '#e6edf3'); }
   else if(ev.type==='boom'){ addSplat(ev.x,ev.y,'#ffd166'); addSplat(ev.x,ev.y,'#ff8c42'); sfx.boom(); }
   else if(ev.type==='elim'){ feed.unshift({by:ev.by,byId:ev.byId,byTeam:ev.byTeam,vt:ev.vt,vtTeam:ev.vtTeam,rew:ev.rew||0,xp:ev.xp||0,t:5}); if(feed.length>6)feed.pop();
     if(ev.byId===myId && ev.rew){ toast('Splat! +'+ev.rew+' Paint Coins · +'+ev.xp+' XP'); sfx.splat(); }
@@ -571,7 +588,7 @@ function hud(){
     $('hpfill').style.width=dz+'%'; $('hpfill').style.background='linear-gradient(90deg,#6ad0ff,#3da9fc)';
     $('hpNum').textContent=dz+'%'; $('clsName').textContent=y.cls;
     { const rl=y.reloading, clip=(y.clip==null?(y.clipMax||0):y.clip), cm=y.clipMax||0, pool=(y.ammo<0?'∞':y.ammo);
-      $('ammo').innerHTML=`AMMO ${rl?'<span style="color:#ffb84d">⟳ RELOADING</span>':(clip+' / '+cm)} <span style="opacity:.55">· pool ${pool}</span>`+(y.golden?` · <span style="color:#ffd700">${y.goldenArmed?'★ARMED':(y.goldenReady?'GOLD [F]':'gold…')}</span>`:''); }
+      $('ammo').innerHTML=(y.melee?`<span style="color:#9b5de5">⚔ MELEE</span>`:`AMMO ${rl?'<span style="color:#ffb84d">⟳ RELOADING</span>':(clip+' / '+cm)} <span style="opacity:.55">· pool ${pool}</span>`)+(y.ammoSel==='fast'?` · <span style="color:#ff6b6b">⚡Fast ${y.fastAmmo||0}</span>`:'')+(y.golden?` · <span style="color:#ffd700">${y.goldenArmed?'★ARMED':(y.goldenReady?'GOLD [F]':'gold…')}</span>`:''); }
     let gl=''; if(y.gadget==='mine') gl=`Mines: ${y.mineCharges} <span style="color:#8aa0b3">[G]</span>`; else if(y.gadget==='turret') gl=y.hasTurret?'Turret: deployed':'Turret ready <span style="color:#8aa0b3">[G]</span>'; else if(y.gadget==='jetpack') gl='Jetpack active'; else if(y.gadget==='decoy') gl=`Decoys: ${y.mineCharges||0} <span style="color:#8aa0b3">[G]</span>`; else gl='No gadget';
     $('gadgetline').innerHTML=gl;
     $('lvNum').textContent='Lv '+y.level; $('xpfill').style.width=clamp(y.xpInto/y.xpNeed,0,1)*100+'%';
@@ -596,11 +613,16 @@ function hud(){
 }
 function decay(dt){ for(let i=feed.length-1;i>=0;i--){feed[i].t-=dt; if(feed[i].t<=0)feed.splice(i,1);} for(let i=toasts.length-1;i>=0;i--){toasts[i].t-=dt; if(toasts[i].t<=0)toasts.splice(i,1);} for(let i=chat.length-1;i>=0;i--){chat[i].t-=dt; if(chat[i].t<=0)chat.splice(i,1);} }
 
+function toggleLeaderboard(){ const p=$('leaderboard'); if(!p) return; if(p.classList.contains('hidden')){ p.classList.remove('hidden'); send({t:'leaderboard'}); } else p.classList.add('hidden'); }
+function renderLeaderboard(d){ const g=$('lbgrid'); if(!g) return;
+  const col=(title,rows,suffix)=>{ let h=`<div class="lbcol"><div class="lbh">${title}</div>`; if(!rows||!rows.length){ h+=`<div class="muted" style="padding:8px 2px">No data yet</div>`; } else rows.forEach((r,i)=>{ h+=`<div class="lbrow"><span class="lbrk">${i+1}</span><span class="lbn">${esc(r.name)}</span><span class="lbv">${r.val}${suffix||''}</span></div>`; }); return h+'</div>'; };
+  g.innerHTML = col('Most Splats', d.splats, '') + col('Most Player Splats', d.psplats, '') + col('Most Accurate', d.accuracy, '%'); }
 function openShop(by){ shopOpenedBy=by; storeCats=null; activeTab='class'; syncLoadout(); $('shop').classList.remove('hidden'); buildTabs(); buildGrid(); }
 function openStore(zoneId){ storeCats = zoneId==='armory' ? ['weapon','mods'] : ['armor','gadget','class']; activeTab=storeCats[0]; shopOpenedBy='zone'; syncLoadout(); $('shop').classList.remove('hidden'); buildTabs(); buildGrid(); updateShopLive(); }
 function closeShop(){ shopOpenedBy=null; $('shop').classList.add('hidden'); }
 function toggleShop(by){ if($('shop').classList.contains('hidden')) openShop(by); else closeShop(); }
 $('btnShop').onclick=()=>toggleShop('manual'); $('shopClose').onclick=closeShop;
+$('lbClose').onclick=()=>$('leaderboard').classList.add('hidden');
 $('resetBtn').onclick=()=>{ if(snap&&snap.you) send({t:'resetloadout'}); };
 function setPeekBtn(){ const b=$('btnPeek'); if(b) b.classList.toggle('on',peek); }
 $('btnPeek').onclick=()=>{ peek=!peek; setPeekBtn(); toast(peek?'🔍 Pan mode ON, move mouse to look around':'Pan mode off'); };
@@ -609,8 +631,8 @@ $('chatInput').addEventListener('keydown',e=>{ e.stopPropagation(); if(e.key==='
 $('anteBtn').onclick=()=>{ if(snap&&snap.you) send({t:'ante', on:!snap.you.wantAnte, amt:snap.you.anteAmt||100}); };
 $('anteAmt').onclick=()=>{ if(!snap||!snap.you) return; const opts=snap.anteOptions||[100,500,1000]; const cur=snap.you.anteAmt||opts[0]; const next=opts[(opts.indexOf(cur)+1)%opts.length]; send({t:'ante', on:snap.you.wantAnte, amt:next}); };
 function ldWeight(ld){ let w=(loadCfg?loadCfg.weaponWt:4); for(const m of ld.wmods){ if(catalog.wmod[m]) w+=catalog.wmod[m].wt||0; } for(const c of ld.chips){ if(catalog.chip[c]) w+=catalog.chip[c].wt||0; } return w; }
-function syncLoadout(){ const y=snap&&snap.you; if(!y||!y.equip) return; myLoadout={weapon:y.equip.weapon, wmods:(y.equip.wmods||[]).slice(), chips:(y.equip.chips||[]).slice(), gadget:y.equip.gadget||'none'}; }
-function sendLoadout(){ if(myLoadout) send({t:'loadout', weapon:myLoadout.weapon, wmods:myLoadout.wmods, chips:myLoadout.chips, gadget:myLoadout.gadget}); }
+function syncLoadout(){ const y=snap&&snap.you; if(!y||!y.equip) return; myLoadout={weapon:y.equip.weapon, wmods:(y.equip.wmods||[]).slice(), chips:(y.equip.chips||[]).slice(), gadget:y.equip.gadget||'none', ammo:y.equip.ammo||'none'}; }
+function sendLoadout(){ if(myLoadout) send({t:'loadout', weapon:myLoadout.weapon, wmods:myLoadout.wmods, chips:myLoadout.chips, gadget:myLoadout.gadget, ammo:myLoadout.ammo}); }
 function ownsIt(cat,id){ const y=snap.you; const it=catalog[cat]&&catalog[cat][id]; if(it&&it.cost===0) return true; if(cat==='weapon'&&(classesInfo[y.cls]||{}).defWeapon===id) return true; return (y.owned||[]).includes(cat+':'+id); }
 function ldSummary(y){ const el=document.createElement('div'); el.className='ldsum'; if(!myLoadout) return el;
   const wN=(catalog.weapon[myLoadout.weapon]||{}).name||myLoadout.weapon;
@@ -619,11 +641,12 @@ function ldSummary(y){ const el=document.createElement('div'); el.className='lds
   el.innerHTML=`<span class="ldk">Equipped</span> <b style="color:${CLS_COLORS[y.cls]||'#fff'}">${y.cls}</b> · <b>${wN}</b> · ${myLoadout.wmods.length} mod${myLoadout.wmods.length===1?'':'s'} · ${myLoadout.chips.length} chip${myLoadout.chips.length===1?'':'s'} · ${gN} · <b style="color:${w>cap?'#ff6b6b':'#9be36a'}">⚖ ${w}/${cap}</b>`;
   return el; }
 function autoEquipBought(b){ if(!myLoadout) syncLoadout(); if(!myLoadout||!b) return;
+  if(b.cat==='ammo'){ myLoadout.ammo=b.id; sendLoadout(); return; }
   if(b.cat==='weapon'){ myLoadout.weapon=b.id; sendLoadout(); }
   else if(b.cat==='gadget'){ myLoadout.gadget=b.id; sendLoadout(); }
   else if(b.cat==='wmod'){ const s=(loadCfg?loadCfg.wmodSlots:2); if(myLoadout.wmods.length<s){ myLoadout.wmods.push(b.id); sendLoadout(); } }
   else if(b.cat==='chip'){ const s=(loadCfg?loadCfg.chipSlots:5); if(myLoadout.chips.length<s){ myLoadout.chips.push(b.id); sendLoadout(); } } }
-function buildTabs(){ const t=$('tabs'); t.innerHTML=''; const cats=['class','weapon','mods','armor','gadget','modes'];
+function buildTabs(){ const t=$('tabs'); t.innerHTML=''; const cats=['class','weapon','mods','armor','gadget','ammo','modes'];
   for(const cat of cats){ const b=document.createElement('button'); b.className=(cat===activeTab?'sel':''); b.textContent=TAB_LABELS[cat]||cat; b.onclick=()=>{ activeTab=cat; pendingClass=null; buildTabs(); buildGrid(); }; t.appendChild(b); }
   const ab=document.querySelector('.antebox'); if(ab) ab.style.display='flex'; }
 function buildGrid(){
@@ -705,6 +728,22 @@ function buildGrid(){
       else if(afford){ b.textContent='Buy & Equip'; b.onclick=()=>{ lastBuy={cat:'gadget',id}; send({t:'buy',item:'gadget:'+id}); }; }
       else { b.textContent='Need 💰'+it.cost; b.disabled=true; }
       el.appendChild(b); grid.appendChild(el);
+    }
+    return;
+  }
+  if(activeTab==='ammo'){
+    const stock=y.fastAmmo||0;
+    for(const id in catalog.ammo){ const it=catalog.ammo[id]; const afford=y.money>=it.cost; const using=(myLoadout.ammo===id);
+      const el=document.createElement('div'); el.className='item'+(using?' eq':'');
+      el.innerHTML=`<div class="in"><span>${it.name} ${id==='fast'?`<span style="color:#ff6b6b">${stock} shots left</span>`:''}</span><span class="cost">💰 ${it.cost}</span></div><div class="id">${it.desc||''}</div>`;
+      const row=document.createElement('div'); row.style.cssText='display:flex;gap:6px;margin-top:6px;flex-wrap:wrap';
+      const buy=document.createElement('button'); if(afford){ buy.textContent='Buy +'+it.shots; buy.onclick=()=>{ lastBuy={cat:'ammo',id}; send({t:'buy',item:'ammo:'+id}); }; } else { buy.textContent='Need 💰'+it.cost; buy.disabled=true; }
+      row.appendChild(buy);
+      const tog=document.createElement('button'); tog.className='equip';
+      if(stock<=0 && !using){ tog.textContent='Use (buy first)'; tog.disabled=true; }
+      else if(using){ tog.textContent='✓ Using (turn off)'; tog.onclick=()=>{ myLoadout.ammo='none'; sendLoadout(); buildGrid(); }; }
+      else { tog.textContent='Use this ammo'; tog.onclick=()=>{ myLoadout.ammo=id; sendLoadout(); buildGrid(); }; }
+      row.appendChild(tog); el.appendChild(row); grid.appendChild(el);
     }
     return;
   }
