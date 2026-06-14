@@ -48,6 +48,7 @@
   #hpfill{height:100%; width:100%; background:linear-gradient(90deg,#37d67a,#bcd836); transition:width .1s}
   #ammo{margin-top:7px; font-size:13px; color:#cddae6}
   #gadgetline{margin-top:4px; font-size:12px; color:var(--accent)}
+  #ultline{margin-top:3px; font-size:12px; font-weight:800}
   .lvlrow{display:flex; align-items:center; gap:8px; margin-top:7px; font-size:12px; color:var(--muted)}
   .lvlrow .lv{color:#cbb3ff; font-weight:800}
   #xpbar{flex:1; height:8px; background:#0c141c; border-radius:5px; overflow:hidden}
@@ -123,6 +124,7 @@
   body.touch kbd{ display:none; }
   #btnReloadT{ right:22px; bottom:122px; }
   #btnGadgetT{ right:94px; bottom:122px; }
+  #btnUltT{ right:22px; bottom:194px; color:#ffd166; }
   @media(max-width:820px){
     #lowerleft{ width:46vw; max-width:240px; left:10px; bottom:10px; }
     #minimap{ width:120px; height:90px; right:10px; bottom:10px; }
@@ -147,6 +149,7 @@
     <button id="btnReady">✓ Ready</button>
     <button id="btnReloadT" class="touchbtn" title="Reload">⟳</button>
     <button id="btnGadgetT" class="touchbtn" title="Gadget">✸</button>
+    <button id="btnUltT" class="touchbtn" title="Ultimate">⚡</button>
     <div id="chat"><div id="chatlog"></div><input id="chatInput" maxlength="160" placeholder="Press Enter to chat" autocomplete="off"></div>
     <div id="lowerleft">
       <div id="hpwrap">
@@ -154,6 +157,7 @@
         <div id="hpbar"><div id="hpfill"></div></div>
         <div id="ammo"></div>
         <div id="gadgetline"></div>
+        <div id="ultline"></div>
         <div class="lvlrow"><span class="lv" id="lvNum">Lv 1</span><div id="xpbar"><div id="xpfill"></div></div></div>
         <div id="terr"></div>
       </div>
@@ -238,14 +242,14 @@ addEventListener('resize',resize); resize();
 
 let ws=null, myId=null, arena={w:2000,h:1500}, obstacles=[], terrain=null, catalog=null, classesInfo=null, unlockLevel=10;
 let snap=null, view=new Map(), splats=[], feed=[], toasts=[], cam={x:0,y:0}, connected=false;
-let ter=null, terMini=null; const keys={}, mouse={x:0,y:0,down:false}; let reloadFlag=false, deployFlag=false, goldenFlag=false;
+let ter=null, terMini=null; const keys={}, mouse={x:0,y:0,down:false}; let reloadFlag=false, deployFlag=false, goldenFlag=false, ultFlag=false;
 const tMove={id:null,ox:0,oy:0,x:0,y:0}, tAim={id:null,ox:0,oy:0,x:0,y:0};
 const IS_TOUCH=(window.matchMedia&&matchMedia('(pointer:coarse)').matches)||('ontouchstart'in window)||navigator.maxTouchPoints>0;
 if(IS_TOUCH) document.addEventListener('DOMContentLoaded',()=>document.body.classList.add('touch'));
 let shopOpenedBy=null, activeTab='class', myLoadout=null, loadCfg=null, classUnlock=null;
 let lastBuy=null, pendingClass=null;
 let lobby=null, lobbyCanvas=null, freeCam={x:0,y:0}, storeCats=null;
-let actx=null, muted=false, prevAmmo=null, prevClip=null, prevDowned=false, bannerT=null; let peek=false; let myPos=null; let chat=[]; let shake=0, hitMarkerT=0, myAim=0; const muzzles=[]; const CLIENT_BUILD='hvpb-2026.06.14.24';
+let actx=null, muted=false, prevAmmo=null, prevClip=null, prevDowned=false, bannerT=null; let peek=false; let myPos=null, srvPos=null; let chat=[]; let shake=0, hitMarkerT=0, myAim=0; const muzzles=[]; const CLIENT_BUILD='hvpb-2026.06.14.26';
 function aud(){ if(!actx){ try{ actx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } return actx; }
 function blip(type,freq,dur,vol,ramp){ if(muted) return; const a=aud(); if(!a) return; try{ const o=a.createOscillator(),g=a.createGain(); o.type=type; o.frequency.value=freq; if(ramp) o.frequency.exponentialRampToValueAtTime(Math.max(30,freq+ramp),a.currentTime+dur); g.gain.value=vol; g.gain.exponentialRampToValueAtTime(0.0001,a.currentTime+dur); o.connect(g); g.connect(a.destination); o.start(); o.stop(a.currentTime+dur); }catch(e){} }
 const sfx={
@@ -267,7 +271,7 @@ const CLS_COLORS={Trooper:'#cbd5e1',VetTrooper:'#7dd3fc',HeavyWeapons:'#ff8c42',
 
 addEventListener('keydown',e=>{ if(e.target && (e.target.id==='chatInput'||e.target.id==='nameIn'||e.target.id==='passIn')) return; const k=e.key.toLowerCase(); keys[k]=true;
   if(connected && k==='enter'){ e.preventDefault(); const ci=$('chatInput'); if(ci) ci.focus(); return; }
-  if(k==='r') reloadFlag=true; if(k==='g') deployFlag=true;
+  if(k==='r') reloadFlag=true; if(k==='g') deployFlag=true; if(k==='q') ultFlag=true;
   if(connected && k==='b') toggleShop('manual');
   if(connected && k==='l') toggleLeaderboard();
   if(connected && k==='e' && snap && snap.you && snap.you.zone && $('shop').classList.contains('hidden')) openStore(snap.you.zone);
@@ -326,8 +330,8 @@ function onMsg(m){
   else if(m.t==='map'){ arena=m.arena; terrain=m.terrain; mm.height=Math.round(180*arena.h/arena.w); prerenderTerrain(); }
   else if(m.t==='state'){ snap=m;
     if(m.you){ if(m.you.downed&&!prevDowned){ if(sfx.hurt)sfx.hurt(); showBanner('SPLATTED! RETURN FIRE','#ff6b6b'); } prevDowned=!!m.you.downed; if(prevClip!=null && m.you.alive && m.you.clip!=null && m.you.clip<prevClip){ sfx.shoot(); if(myPos) muzzles.push({x:myPos.x,y:myPos.y,a:myAim,t:0.07}); } prevClip=(m.you.clip==null?prevClip:m.you.clip); prevAmmo=m.you.ammo;
-      if(!myPos || !m.you.alive || m.phase!=='active'){ myPos={x:m.you.x,y:m.you.y}; }
-      else { const dx=m.you.x-myPos.x, dy=m.you.y-myPos.y, d=Math.hypot(dx,dy); if(d>120){ myPos.x=m.you.x; myPos.y=m.you.y; } else { myPos.x+=dx*0.2; myPos.y+=dy*0.2; } } }
+      if(!myPos || !m.you.alive || m.phase!=='active'){ myPos={x:m.you.x,y:m.you.y}; srvPos={x:m.you.x,y:m.you.y}; }
+      else { srvPos={x:m.you.x,y:m.you.y}; const dx=m.you.x-myPos.x, dy=m.you.y-myPos.y; if(dx*dx+dy*dy>220*220){ myPos.x=m.you.x; myPos.y=m.you.y; } } }
     if(m.events) for(const ev of m.events) handleEvent(ev); }
   else if(m.t==='authfail'){ $('status').textContent='⚠ '+(m.msg||'Login failed'); try{ws.close();}catch(e){} connected=false; }
   else if(m.t==='chat'){ chat.push({from:m.from,team:m.team,text:m.text,t:14}); if(chat.length>10) chat.shift(); }
@@ -348,6 +352,8 @@ function handleEvent(ev){
   if(ev.type==='splat') addSplat(ev.x,ev.y,ev.c);
   else if(ev.type==='splash'){ addSplashBlob(ev.x,ev.y,ev.r,ev.c); sfx.boom(); if(snap&&snap.you){ const d=Math.hypot(ev.x-snap.you.x,ev.y-snap.you.y); if(d<(ev.r||0)+140) addShake(12); } }
   else if(ev.type==='melee'){ addSplashBlob(ev.x+Math.cos(ev.a)*40, ev.y+Math.sin(ev.a)*40, 15, '#e6edf3'); }
+  else if(ev.type==='ult'){ if(ev.id===myId) sfx.level(); }
+  else if(ev.type==='teleport'){ addSplashBlob(ev.fx,ev.fy,20,'#ffd166'); addSplashBlob(ev.tx,ev.ty,20,'#ffd166'); sfx.boom(); const v=view.get(ev.id); if(v){ v.x=ev.tx; v.y=ev.ty; } if(ev.id===myId && myPos){ myPos.x=ev.tx; myPos.y=ev.ty; if(srvPos){ srvPos.x=ev.tx; srvPos.y=ev.ty; } } }
   else if(ev.type==='boom'){ addSplat(ev.x,ev.y,'#ffd166'); addSplat(ev.x,ev.y,'#ff8c42'); sfx.boom(); }
   else if(ev.type==='elim'){ feed.unshift({by:ev.by,byId:ev.byId,byTeam:ev.byTeam,vt:ev.vt,vtTeam:ev.vtTeam,rew:ev.rew||0,xp:ev.xp||0,t:5}); if(feed.length>6)feed.pop();
     if(ev.byId===myId){ sfx.splat(); hitMarkerT=0.3; addShake(4); if(ev.rew) toast('Splat! +'+ev.rew+' Paint Coins · +'+ev.xp+' XP'); }
@@ -442,7 +448,7 @@ setInterval(()=>{
   let aimO=aim, aimDistO=aimDist, fireO=mouse.down;
   if(tAim.id!==null){ const dx=tAim.x-tAim.ox, dy=tAim.y-tAim.oy, d=Math.hypot(dx,dy); if(d>8) aimO=Math.atan2(dy,dx); fireO=true; aimDistO=9999; myAim=aimO; }
   if(snap.phase==='active' && snap.you.downed){ mx=0; my=0; }
-  send({t:'input',mx,my,aim:aimO,aimDist:aimDistO,fire:fireO&&canFight,reload:reloadFlag,deploy:deployFlag&&canFight,armGolden:goldenFlag}); reloadFlag=false; deployFlag=false; goldenFlag=false;
+  send({t:'input',mx,my,aim:aimO,aimDist:aimDistO,fire:fireO&&canFight,reload:reloadFlag,deploy:deployFlag&&canFight,armGolden:goldenFlag,ult:ultFlag&&canFight}); reloadFlag=false; deployFlag=false; goldenFlag=false; ultFlag=false;
 },33);
 setInterval(()=>{ if(connected && ws && ws.readyState===1) send({t:'ping',ts:performance.now()}); }, 2000);
 
@@ -461,6 +467,7 @@ function ease(dt){
   if(!overlay && tMove.id!==null){ const dx=tMove.x-tMove.ox, dy=tMove.y-tMove.oy, d=Math.hypot(dx,dy); if(d>12){ const mag=Math.min(1,d/70); mx=dx/d*mag; my=dy/d*mag; } else { mx=0; my=0; } }
     if(mx||my){ const mm2=Math.hypot(mx,my), sp=snap.you.spd||120; myPos.x+=mx/mm2*sp*dt; myPos.y+=my/mm2*sp*dt;
       myPos.x=clamp(myPos.x,54,arena.w-54); myPos.y=clamp(myPos.y,54,arena.h-54); }
+    if(srvPos){ const ex=srvPos.x-myPos.x, ey=srvPos.y-myPos.y; const ck=1-Math.pow(Math.hypot(ex,ey)>26?0.012:0.06, dt); myPos.x+=ex*ck; myPos.y+=ey*ck; }   // smooth per-frame reconcile (kills the 30Hz camera jerk; snappier on large error)
   }
   const seen=new Set();
   for(const f of snap.fighters){ seen.add(f.id); let v=view.get(f.id); if(!v){ v={x:f.x,y:f.y,a:f.a}; view.set(f.id,v); }
@@ -576,12 +583,14 @@ function drawFighter(v){
     const S=32, hh=S/2;
     ctx.save(); ctx.translate(v.x,v.y);
     if(Math.cos(v.a)<0) ctx.scale(-1,1);            // face left when aiming left, else right — no mouse-spin
-    ctx.drawImage(spr,-hh,-hh,S,S);
+    if(f.ult==='invis') ctx.globalAlpha=me?0.4:0.3; ctx.drawImage(spr,-hh,-hh,S,S); ctx.globalAlpha=1;
     ctx.restore();
     if(f.gold){ ctx.strokeStyle='#ffd700'; ctx.lineWidth=3; ctx.beginPath(); ctx.arc(v.x,v.y,hh+4,0,7); ctx.stroke(); }
     if(f.sh){ ctx.strokeStyle='#7fefff'; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(v.x,v.y,hh+6,0,7); ctx.stroke(); }
     if(f.fast){ ctx.strokeStyle='rgba(255,140,40,.85)'; ctx.lineWidth=2.5; ctx.beginPath(); ctx.arc(v.x,v.y,hh+2,0.5,2.3); ctx.stroke(); }
     if(f.dn){ const pr=(0.45+0.4*Math.abs(Math.sin(performance.now()/110))).toFixed(2); ctx.strokeStyle='rgba(255,60,60,'+pr+')'; ctx.lineWidth=3.5; ctx.beginPath(); ctx.arc(v.x,v.y,hh+5,0,7); ctx.stroke(); }
+    if(f.ult==='speed'){ ctx.strokeStyle='rgba(120,220,255,.85)'; ctx.lineWidth=2.5; ctx.beginPath(); ctx.arc(v.x,v.y,hh+3,0,7); ctx.stroke(); }
+    if(f.ult==='evac'){ const pe=(0.4+0.5*Math.abs(Math.sin(performance.now()/90))).toFixed(2); ctx.strokeStyle='rgba(255,210,80,'+pe+')'; ctx.lineWidth=3; ctx.beginPath(); ctx.arc(v.x,v.y,hh+6,0,7); ctx.stroke(); }
     ctx.fillStyle=col; ctx.beginPath(); ctx.moveTo(v.x,v.y-hh-9); ctx.lineTo(v.x-5,v.y-hh-1); ctx.lineTo(v.x+5,v.y-hh-1); ctx.closePath(); ctx.fill();
     if(me){ ctx.lineWidth=1.5; ctx.strokeStyle='#fff'; ctx.stroke(); }
     if(f.cam){ ctx.strokeStyle='rgba(180,255,180,.6)'; ctx.lineWidth=1.5; ctx.setLineDash([4,3]); ctx.strokeRect(v.x-hh-3,v.y-hh-3,S+6,S+6); ctx.setLineDash([]); }
@@ -635,6 +644,7 @@ function hud(){
       $('ammo').innerHTML=(y.melee?`<span style="color:#9b5de5">⚔ MELEE</span>`:`AMMO ${rl?'<span style="color:#ffb84d">⟳ RELOADING</span>':(clip+' / '+cm)} <span style="opacity:.55">· pool ${pool}</span>`)+(y.ammoSel==='fast'?` · <span style="color:#ff6b6b">⚡Fast ${y.fastAmmo||0}</span>`:'')+(y.golden?` · <span style="color:#ffd700">${y.goldenArmed?'★ARMED':(y.goldenReady?'GOLD [F]':'gold…')}</span>`:''); }
     let gl=''; if(y.gadget==='mine') gl=`Mines: ${y.mineCharges} <span style="color:#8aa0b3">[G]</span>`; else if(y.gadget==='turret') gl=y.hasTurret?'Turret: deployed':'Turret ready <span style="color:#8aa0b3">[G]</span>'; else if(y.gadget==='jetpack') gl='Jetpack active'; else if(y.gadget==='decoy') gl=`Decoys: ${y.mineCharges||0} <span style="color:#8aa0b3">[G]</span>`; else gl='No gadget';
     $('gadgetline').innerHTML=gl;
+    { const ul=$('ultline'); if(ul){ let ut=''; if(y.ult){ const nm=({evac:'Emergency Evac',speed:'Speed Boost',invis:'Cloak'})[y.ult]||y.ult; if(y.evacT>0) ut=`<span style="color:#ffd166">⚡ EVAC ${y.evacT.toFixed(1)}s</span>`; else if(y.ultActive) ut=`<span style="color:#7ad7ff">⚡ ${nm.toUpperCase()} ${Math.ceil(y.ultT)}s</span>`; else if(y.ultReady) ut=`<span style="color:#9be36a">⚡ ${nm} READY [Q]</span>`; else ut=`<span style="color:#6f8499">⚡ ${nm} used</span>`; } ul.innerHTML=ut; } }
     $('lvNum').textContent='Lv '+y.level; $('xpfill').style.width=clamp(y.xpInto/y.xpNeed,0,1)*100+'%';
     const tn=['Plains','Forest','Water','Mountain'][y.terrain]||''; $('terr').textContent='Terrain: '+tn+'  ·  one hit = out'+(y.cls!=='Trooper'?'':'  ·  Lv'+y.unlockLevel+' unlocks classes');
     $('topleft').innerHTML=`<div id="wallet">💰 ${y.money} Paint Coins</div>`+(s.pot>0?`<div id="pot">Pot: 💰 ${s.pot}${y.anteIn?' (you anted)':''}</div>`:'')+`Your splats: <b style="color:#fff">${y.kills}</b>`;
@@ -670,7 +680,7 @@ $('lbClose').onclick=()=>$('leaderboard').classList.add('hidden');
 $('resetBtn').onclick=()=>{ if(snap&&snap.you) send({t:'resetloadout'}); };
 function setPeekBtn(){ const b=$('btnPeek'); if(b) b.classList.toggle('on',peek); }
 $('btnPeek').onclick=()=>{ peek=!peek; setPeekBtn(); toast(peek?'🔍 Pan mode ON, move mouse to look around':'Pan mode off'); };
-{ const rb=$('btnReloadT'); if(rb) rb.addEventListener('pointerdown',e=>{ e.preventDefault(); reloadFlag=true; }); const gb=$('btnGadgetT'); if(gb) gb.addEventListener('pointerdown',e=>{ e.preventDefault(); deployFlag=true; }); }
+{ const rb=$('btnReloadT'); if(rb) rb.addEventListener('pointerdown',e=>{ e.preventDefault(); reloadFlag=true; }); const gb=$('btnGadgetT'); if(gb) gb.addEventListener('pointerdown',e=>{ e.preventDefault(); deployFlag=true; }); const ub=$('btnUltT'); if(ub) ub.addEventListener('pointerdown',e=>{ e.preventDefault(); ultFlag=true; }); }
 $('btnReady').onclick=()=>{ if(snap&&snap.you) send({t:'ready', on:!(snap.you.ready!==false)}); };
 $('chatInput').addEventListener('keydown',e=>{ e.stopPropagation(); if(e.key==='Enter'){ const v=$('chatInput').value.trim(); if(v) send({t:'chat',text:v}); $('chatInput').value=''; $('chatInput').blur(); } else if(e.key==='Escape'){ $('chatInput').value=''; $('chatInput').blur(); } });
 $('anteBtn').onclick=()=>{ if(snap&&snap.you) send({t:'ante', on:!snap.you.wantAnte, amt:snap.you.anteAmt||100}); };
