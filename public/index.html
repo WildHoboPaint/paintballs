@@ -122,9 +122,9 @@
   .touchbtn{ display:none; position:absolute; pointer-events:auto; width:62px; height:62px; border-radius:50%; background:rgba(8,11,16,.55); border:2px solid #2e3d4d; color:#dce8f2; font-size:24px; font-weight:800; font-family:inherit; -webkit-tap-highlight-color:transparent; align-items:center; justify-content:center; }
   body.touch .touchbtn{ display:flex; }
   body.touch kbd{ display:none; }
-  #btnReloadT{ right:22px; bottom:122px; }
-  #btnGadgetT{ right:94px; bottom:122px; }
-  #btnUltT{ right:22px; bottom:194px; color:#ffd166; }
+  #btnReloadT{ right:14px; bottom:88px; }
+  #btnGadgetT{ right:14px; bottom:160px; }
+  #btnUltT{ right:14px; bottom:232px; color:#ffd166; }
   @media(max-width:820px){
     #lowerleft{ width:46vw; max-width:240px; left:10px; bottom:10px; }
     #minimap{ width:120px; height:90px; right:10px; bottom:10px; }
@@ -183,7 +183,7 @@
       <span><i class="sw" style="background:#245f7e"></i>Water (slow)</span>
       <span><i class="sw" style="background:#6f6657"></i>Mountain (see all)</span>
     </div>
-    <div class="keys"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> move · <kbd>Mouse</kbd> aim · <kbd>Click</kbd> fire · <kbd>R</kbd> reload · <kbd>G</kbd> deploy gadget · <kbd>B</kbd> loadout · <kbd>L</kbd> leaderboard</div>
+    <div class="keys"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> move · <kbd>Mouse</kbd> aim · <kbd>Click</kbd> fire · <kbd>R</kbd> reload · <kbd>G</kbd> deploy gadget · <kbd>B</kbd> loadout · <kbd>L</kbd> leaderboard · <kbd>Space</kbd> ultimate</div>
     <div style="margin-top:12px"><a id="advToggle" style="color:#5f7488; font-size:12px; cursor:pointer; text-decoration:underline">⚙ Connect to a different server</a></div>
     <div class="row hidden" id="advRow" style="margin-top:8px"><input id="serverIn" class="txt" style="width:min(320px,90vw)" placeholder="ws://localhost:3000"></div>
   </div>
@@ -249,7 +249,7 @@ if(IS_TOUCH) document.addEventListener('DOMContentLoaded',()=>document.body.clas
 let shopOpenedBy=null, activeTab='class', myLoadout=null, loadCfg=null, classUnlock=null;
 let lastBuy=null, pendingClass=null;
 let lobby=null, lobbyCanvas=null, freeCam={x:0,y:0}, storeCats=null;
-let actx=null, muted=false, prevAmmo=null, prevClip=null, prevDowned=false, bannerT=null; let peek=false; let myPos=null, srvPos=null; let chat=[]; let shake=0, hitMarkerT=0, myAim=0; const muzzles=[]; const CLIENT_BUILD='hvpb-2026.06.14.26';
+let actx=null, muted=false, prevAmmo=null, prevClip=null, prevDowned=false, bannerT=null; let peek=false; let myPos=null, srvPos=null; let chat=[]; let shake=0, hitMarkerT=0, myAim=0; const muzzles=[]; const CLIENT_BUILD='hvpb-2026.06.14.27';
 function aud(){ if(!actx){ try{ actx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } return actx; }
 function blip(type,freq,dur,vol,ramp){ if(muted) return; const a=aud(); if(!a) return; try{ const o=a.createOscillator(),g=a.createGain(); o.type=type; o.frequency.value=freq; if(ramp) o.frequency.exponentialRampToValueAtTime(Math.max(30,freq+ramp),a.currentTime+dur); g.gain.value=vol; g.gain.exponentialRampToValueAtTime(0.0001,a.currentTime+dur); o.connect(g); g.connect(a.destination); o.start(); o.stop(a.currentTime+dur); }catch(e){} }
 const sfx={
@@ -271,7 +271,7 @@ const CLS_COLORS={Trooper:'#cbd5e1',VetTrooper:'#7dd3fc',HeavyWeapons:'#ff8c42',
 
 addEventListener('keydown',e=>{ if(e.target && (e.target.id==='chatInput'||e.target.id==='nameIn'||e.target.id==='passIn')) return; const k=e.key.toLowerCase(); keys[k]=true;
   if(connected && k==='enter'){ e.preventDefault(); const ci=$('chatInput'); if(ci) ci.focus(); return; }
-  if(k==='r') reloadFlag=true; if(k==='g') deployFlag=true; if(k==='q') ultFlag=true;
+  if(k==='r') reloadFlag=true; if(k==='g') deployFlag=true; if(k===' ') ultFlag=true;
   if(connected && k==='b') toggleShop('manual');
   if(connected && k==='l') toggleLeaderboard();
   if(connected && k==='e' && snap && snap.you && snap.you.zone && $('shop').classList.contains('hidden')) openStore(snap.you.zone);
@@ -445,8 +445,8 @@ setInterval(()=>{
   const wx=cam.x+mouse.x/ZOOM, wy=cam.y+mouse.y/ZOOM; const aim=Math.atan2(wy-apy, wx-apx); myAim=aim;
   const aimDist=Math.hypot(wx-apx, wy-apy);   // shoot only as far as you aim
   const canFight = snap.phase==='active' && !overlay;
-  let aimO=aim, aimDistO=aimDist, fireO=mouse.down;
-  if(tAim.id!==null){ const dx=tAim.x-tAim.ox, dy=tAim.y-tAim.oy, d=Math.hypot(dx,dy); if(d>8) aimO=Math.atan2(dy,dx); fireO=true; aimDistO=9999; myAim=aimO; }
+  let aimO=(IS_TOUCH?myAim:aim), aimDistO=aimDist, fireO=mouse.down;
+  if(tAim.id!==null){ const dx=tAim.x-tAim.ox, dy=tAim.y-tAim.oy, d=Math.hypot(dx,dy); aimDistO=9999; if(d>16){ aimO=Math.atan2(dy,dx); myAim=aimO; fireO=true; } else { aimO=myAim; fireO=false; } }
   if(snap.phase==='active' && snap.you.downed){ mx=0; my=0; }
   send({t:'input',mx,my,aim:aimO,aimDist:aimDistO,fire:fireO&&canFight,reload:reloadFlag,deploy:deployFlag&&canFight,armGolden:goldenFlag,ult:ultFlag&&canFight}); reloadFlag=false; deployFlag=false; goldenFlag=false; ultFlag=false;
 },33);
@@ -644,7 +644,7 @@ function hud(){
       $('ammo').innerHTML=(y.melee?`<span style="color:#9b5de5">⚔ MELEE</span>`:`AMMO ${rl?'<span style="color:#ffb84d">⟳ RELOADING</span>':(clip+' / '+cm)} <span style="opacity:.55">· pool ${pool}</span>`)+(y.ammoSel==='fast'?` · <span style="color:#ff6b6b">⚡Fast ${y.fastAmmo||0}</span>`:'')+(y.golden?` · <span style="color:#ffd700">${y.goldenArmed?'★ARMED':(y.goldenReady?'GOLD [F]':'gold…')}</span>`:''); }
     let gl=''; if(y.gadget==='mine') gl=`Mines: ${y.mineCharges} <span style="color:#8aa0b3">[G]</span>`; else if(y.gadget==='turret') gl=y.hasTurret?'Turret: deployed':'Turret ready <span style="color:#8aa0b3">[G]</span>'; else if(y.gadget==='jetpack') gl='Jetpack active'; else if(y.gadget==='decoy') gl=`Decoys: ${y.mineCharges||0} <span style="color:#8aa0b3">[G]</span>`; else gl='No gadget';
     $('gadgetline').innerHTML=gl;
-    { const ul=$('ultline'); if(ul){ let ut=''; if(y.ult){ const nm=({evac:'Emergency Evac',speed:'Speed Boost',invis:'Cloak'})[y.ult]||y.ult; if(y.evacT>0) ut=`<span style="color:#ffd166">⚡ EVAC ${y.evacT.toFixed(1)}s</span>`; else if(y.ultActive) ut=`<span style="color:#7ad7ff">⚡ ${nm.toUpperCase()} ${Math.ceil(y.ultT)}s</span>`; else if(y.ultReady) ut=`<span style="color:#9be36a">⚡ ${nm} READY [Q]</span>`; else ut=`<span style="color:#6f8499">⚡ ${nm} used</span>`; } ul.innerHTML=ut; } }
+    { const ul=$('ultline'); if(ul){ let ut=''; if(y.ult){ const nm=({evac:'Emergency Evac',speed:'Speed Boost',invis:'Cloak'})[y.ult]||y.ult; if(y.evacT>0) ut=`<span style="color:#ffd166">⚡ EVAC ${y.evacT.toFixed(1)}s</span>`; else if(y.ultActive) ut=`<span style="color:#7ad7ff">⚡ ${nm.toUpperCase()} ${Math.ceil(y.ultT)}s</span>`; else if(y.ultReady) ut=`<span style="color:#9be36a">⚡ ${nm} READY [Space]</span>`; else ut=`<span style="color:#6f8499">⚡ ${nm} used</span>`; } ul.innerHTML=ut; } }
     $('lvNum').textContent='Lv '+y.level; $('xpfill').style.width=clamp(y.xpInto/y.xpNeed,0,1)*100+'%';
     const tn=['Plains','Forest','Water','Mountain'][y.terrain]||''; $('terr').textContent='Terrain: '+tn+'  ·  one hit = out'+(y.cls!=='Trooper'?'':'  ·  Lv'+y.unlockLevel+' unlocks classes');
     $('topleft').innerHTML=`<div id="wallet">💰 ${y.money} Paint Coins</div>`+(s.pot>0?`<div id="pot">Pot: 💰 ${s.pot}${y.anteIn?' (you anted)':''}</div>`:'')+`Your splats: <b style="color:#fff">${y.kills}</b>`;
