@@ -226,7 +226,7 @@ let ter=null, terMini=null; const keys={}, mouse={x:0,y:0,down:false}; let reloa
 let shopOpenedBy=null, activeTab='class', myLoadout=null, loadCfg=null, classUnlock=null;
 let lastBuy=null, pendingClass=null;
 let lobby=null, lobbyCanvas=null, freeCam={x:0,y:0}, storeCats=null;
-let actx=null, muted=false, prevAmmo=null, prevClip=null, prevDowned=false, bannerT=null; let peek=false; let myPos=null; let chat=[]; const CLIENT_BUILD='hvpb-2026.06.14.21';
+let actx=null, muted=false, prevAmmo=null, prevClip=null, prevDowned=false, bannerT=null; let peek=false; let myPos=null; let chat=[]; const CLIENT_BUILD='hvpb-2026.06.14.22';
 function aud(){ if(!actx){ try{ actx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } return actx; }
 function blip(type,freq,dur,vol,ramp){ if(muted) return; const a=aud(); if(!a) return; try{ const o=a.createOscillator(),g=a.createGain(); o.type=type; o.frequency.value=freq; if(ramp) o.frequency.exponentialRampToValueAtTime(Math.max(30,freq+ramp),a.currentTime+dur); g.gain.value=vol; g.gain.exponentialRampToValueAtTime(0.0001,a.currentTime+dur); o.connect(g); g.connect(a.destination); o.start(); o.stop(a.currentTime+dur); }catch(e){} }
 const sfx={
@@ -267,6 +267,7 @@ $('loginBtn').onclick=()=>connect(false); $('regBtn').onclick=()=>connect(true);
 ;(function(){ const d=document.createElement('div'); d.id='ver'; d.style.cssText='position:fixed;right:8px;bottom:6px;font:600 11px Segoe UI,sans-serif;color:#5b6b7a;z-index:50;pointer-events:none'; d.textContent='build '+CLIENT_BUILD; document.body.appendChild(d); })();
 let pingMs=null;
 ;(function(){ const d=document.createElement('div'); d.id='pingv'; d.style.cssText='position:fixed;right:8px;bottom:22px;font:600 11px Segoe UI,sans-serif;color:#5b6b7a;z-index:50;pointer-events:none'; d.textContent='ping'; document.body.appendChild(d); })();
+;(function(){ const d=document.createElement('div'); d.id='fpsv'; d.style.cssText='position:fixed;right:8px;bottom:38px;font:600 11px Segoe UI,sans-serif;color:#5b6b7a;z-index:50;pointer-events:none'; d.textContent='fps'; document.body.appendChild(d); })();
 $('nameIn').addEventListener('keydown',e=>{ if(e.key==='Enter') $('passIn').focus(); });
 $('passIn').addEventListener('keydown',e=>{ if(e.key==='Enter') connect(false); });
 $('advToggle').onclick=()=>$('advRow').classList.toggle('hidden');
@@ -413,8 +414,10 @@ setInterval(()=>{
 setInterval(()=>{ if(connected && ws && ws.readyState===1) send({t:'ping',ts:performance.now()}); }, 2000);
 
 let lastT=performance.now();
-let hudAcc=0;
-function frame(t){ requestAnimationFrame(frame); const dt=Math.min(0.05,(t-lastT)/1000)||0; lastT=t; try{ if(connected&&snap){ ease(dt); draw(); hudAcc+=dt; if(hudAcc>=0.05){ hudAcc=0; hud(); } decay(dt); } }catch(e){ console.error(e); } }
+let hudAcc=0, fpsAcc=0, fpsFrames=0;
+function frame(t){ requestAnimationFrame(frame); const dt=Math.min(0.05,(t-lastT)/1000)||0; lastT=t;
+  fpsAcc+=dt; fpsFrames++; if(fpsAcc>=0.5){ const fps=Math.round(fpsFrames/fpsAcc); const d=$('fpsv'); if(d){ d.textContent=fps+' fps'; d.style.color=fps>=50?'#5b8c5b':(fps>=30?'#caa44a':'#c46a6a'); } fpsAcc=0; fpsFrames=0; }
+  try{ if(connected&&snap){ ease(dt); draw(); hudAcc+=dt; if(hudAcc>=0.05){ hudAcc=0; hud(); } decay(dt); } }catch(e){ console.error(e); } }
 requestAnimationFrame(frame);
 
 function ease(dt){
