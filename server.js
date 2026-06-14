@@ -267,6 +267,7 @@ setInterval(() => {
 
   for (const c of clients) {
     if (c.playerId == null) continue;
+    if (c.socket && c.socket.writableLength > 120000) continue;   // backpressure: client is behind -> skip this frame so its buffer drains (prevents the lag/ping spiral). Next snapshot is full state.
     if (mapMsg) c.send(mapMsg);
     c.send(game.snapshot(c.playerId, events));
   }

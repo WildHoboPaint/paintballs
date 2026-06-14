@@ -226,7 +226,7 @@ let ter=null, terMini=null; const keys={}, mouse={x:0,y:0,down:false}; let reloa
 let shopOpenedBy=null, activeTab='class', myLoadout=null, loadCfg=null, classUnlock=null;
 let lastBuy=null, pendingClass=null;
 let lobby=null, lobbyCanvas=null, freeCam={x:0,y:0}, storeCats=null;
-let actx=null, muted=false, prevAmmo=null, prevClip=null, prevDowned=false, bannerT=null; let peek=false; let myPos=null; let chat=[]; const CLIENT_BUILD='hvpb-2026.06.14.19';
+let actx=null, muted=false, prevAmmo=null, prevClip=null, prevDowned=false, bannerT=null; let peek=false; let myPos=null; let chat=[]; const CLIENT_BUILD='hvpb-2026.06.14.20';
 function aud(){ if(!actx){ try{ actx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } return actx; }
 function blip(type,freq,dur,vol,ramp){ if(muted) return; const a=aud(); if(!a) return; try{ const o=a.createOscillator(),g=a.createGain(); o.type=type; o.frequency.value=freq; if(ramp) o.frequency.exponentialRampToValueAtTime(Math.max(30,freq+ramp),a.currentTime+dur); g.gain.value=vol; g.gain.exponentialRampToValueAtTime(0.0001,a.currentTime+dur); o.connect(g); g.connect(a.destination); o.start(); o.stop(a.currentTime+dur); }catch(e){} }
 const sfx={
@@ -239,7 +239,7 @@ const sfx={
   lose:()=>[392,311,247].forEach((f,i)=>setTimeout(()=>blip('sawtooth',f,0.22,0.1),i*140))
 };
 function showBanner(text,color){ const b=$('rbanner'); b.textContent=text; b.style.color=color; b.classList.remove('hidden'); clearTimeout(bannerT); bannerT=setTimeout(()=>b.classList.add('hidden'),3000); }
-function addSplashBlob(x,y,r,c){ for(let i=0;i<10;i++){ const a=Math.random()*6.28,d=Math.random()*r*0.8; splats.push({x:x+Math.cos(a)*d,y:y+Math.sin(a)*d,r:r*(0.25+Math.random()*0.25),c,al:.4+Math.random()*0.25}); } if(splats.length>1200) splats.splice(0,splats.length-1200); }
+function addSplashBlob(x,y,r,c){ for(let i=0;i<10;i++){ const a=Math.random()*6.28,d=Math.random()*r*0.8; splats.push({x:x+Math.cos(a)*d,y:y+Math.sin(a)*d,r:r*(0.25+Math.random()*0.25),c,al:.4+Math.random()*0.25}); } if(splats.length>600) splats.splice(0,splats.length-600); }
 const TC=['#2f6b32','#1d4a22','#245f7e','#6f6657'];
 const TAB_LABELS={class:'Class',weapon:'Weapon',mods:'Weapon Mods',armor:'Armor Chips',gadget:'Gadget',ammo:'Ammo',modes:'Modes'};
 const MODE_NAMES={tdm:'Team Deathmatch',ctf:'Capture the Flag',invaders:'Bot Invaders'};
@@ -335,7 +335,7 @@ function handleEvent(ev){
     splats.length=0;   // wipe paint marks between rounds
     toast(tie?'Round draw!':(ev.winner.toUpperCase()+' team wins the round!')); }
 }
-function addSplat(x,y,c){ for(let i=0;i<5;i++){ const a=Math.random()*6.28,d=Math.random()*15; splats.push({x:x+Math.cos(a)*d,y:y+Math.sin(a)*d,r:3+Math.random()*6,c,al:.5+Math.random()*.3}); } if(splats.length>1000) splats.splice(0,splats.length-1000); }
+function addSplat(x,y,c){ for(let i=0;i<5;i++){ const a=Math.random()*6.28,d=Math.random()*15; splats.push({x:x+Math.cos(a)*d,y:y+Math.sin(a)*d,r:3+Math.random()*6,c,al:.5+Math.random()*.3}); } if(splats.length>600) splats.splice(0,splats.length-600); }
 function toast(t){ toasts.unshift({text:t,t:3.5}); if(toasts.length>4)toasts.pop(); }
 
 function blendTerrain(c, grid, rows, cols, tile){
