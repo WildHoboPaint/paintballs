@@ -226,7 +226,7 @@ let ter=null, terMini=null; const keys={}, mouse={x:0,y:0,down:false}; let reloa
 let shopOpenedBy=null, activeTab='class', myLoadout=null, loadCfg=null, classUnlock=null;
 let lastBuy=null, pendingClass=null;
 let lobby=null, lobbyCanvas=null, freeCam={x:0,y:0}, storeCats=null;
-let actx=null, muted=false, prevAmmo=null, prevClip=null, prevDowned=false, bannerT=null; let peek=false; let myPos=null; let chat=[]; const CLIENT_BUILD='hvpb-2026.06.14.20';
+let actx=null, muted=false, prevAmmo=null, prevClip=null, prevDowned=false, bannerT=null; let peek=false; let myPos=null; let chat=[]; const CLIENT_BUILD='hvpb-2026.06.14.21';
 function aud(){ if(!actx){ try{ actx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } return actx; }
 function blip(type,freq,dur,vol,ramp){ if(muted) return; const a=aud(); if(!a) return; try{ const o=a.createOscillator(),g=a.createGain(); o.type=type; o.frequency.value=freq; if(ramp) o.frequency.exponentialRampToValueAtTime(Math.max(30,freq+ramp),a.currentTime+dur); g.gain.value=vol; g.gain.exponentialRampToValueAtTime(0.0001,a.currentTime+dur); o.connect(g); g.connect(a.destination); o.start(); o.stop(a.currentTime+dur); }catch(e){} }
 const sfx={
@@ -413,7 +413,8 @@ setInterval(()=>{
 setInterval(()=>{ if(connected && ws && ws.readyState===1) send({t:'ping',ts:performance.now()}); }, 2000);
 
 let lastT=performance.now();
-function frame(t){ requestAnimationFrame(frame); const dt=Math.min(0.05,(t-lastT)/1000)||0; lastT=t; try{ if(connected&&snap){ ease(dt); draw(); hud(); decay(dt); } }catch(e){ console.error(e); } }
+let hudAcc=0;
+function frame(t){ requestAnimationFrame(frame); const dt=Math.min(0.05,(t-lastT)/1000)||0; lastT=t; try{ if(connected&&snap){ ease(dt); draw(); hudAcc+=dt; if(hudAcc>=0.05){ hudAcc=0; hud(); } decay(dt); } }catch(e){ console.error(e); } }
 requestAnimationFrame(frame);
 
 function ease(dt){
