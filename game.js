@@ -47,7 +47,7 @@ const MAXTIER=5, BOT_TIER=3, SNIPER_BLIND=160; const TIER_COST={2:600,3:1200,4:2
 const HEAVY_CLASSES=['VetTrooper','HeavyWeapons','Officer'];
 function weightCapacity(level){ return 8 + Math.floor(level/5)*2; }
 const LEVELUP_BONUS=20;                 // coins per level gained
-const BUILD='hvpb-2026.06.14.33';        // bump on each change; shown in-game to verify deploys
+const BUILD='hvpb-2026.06.14.35';        // bump on each change; shown in-game to verify deploys
 
 // progression
 const CLASS_UNLOCK_LEVEL=10, LVL_BASE=2, LVL_STEP=1;
@@ -89,7 +89,7 @@ const WEAPONS = {
   pball_gun:    { name:"Paintball Gun",    cost:0,    dmg:1, fireRate:950, spread:0.05, mag:25, range:260, reload:1.6, proj:1, desc:"Short range starter — upgrade to reach further." },
   pball_rifle:  { name:"Paintball Rifle",  cost:350,  dmg:1, fireRate:780, spread:0.035,mag:25, range:420, reload:1.7, proj:1, desc:"More range and a steadier shot." },
   assault_rifle:{ name:"Assault Rifle",    cost:1000, dmg:1, fireRate:360, spread:0.06, mag:30, range:380, reload:1.9, proj:1, desc:"Rapid fire, medium range." },
-  sniper_rifle: { name:"Sniper Rifle",     cost:1200, dmg:1, fireRate:1500,spread:0.004,mag:10, range:780, pspeed:340, reload:2.0, proj:1, scope:true, desc:"Sees across the map (no terrain in the way) but blind up close. Very slow fire." },
+  sniper_rifle: { name:"Sniper Rifle",     cost:1200, dmg:1, fireRate:1500,spread:0.004,mag:10, range:1200, pspeed:340, reload:2.0, proj:1, scope:true, desc:"Sees across the map (no terrain in the way) but blind up close. Very slow fire." },
   minigun:      { name:"Minigun",          cost:1500, dmg:1, fireRate:190, spread:0.12, mag:50, range:340, reload:3.0, proj:1, desc:"Torrent of paint, short range." },
   bazooka:      { name:"Rocket Launcher",  cost:1500, dmg:1, fireRate:2800,spread:0.03, mag:5,  range:600, reload:2.8, proj:1, splash:140, pspeed:130, desc:"Very slow to move & fire — huge area splat, blocked by terrain." },
   grenade_launcher:{ name:"Grenade Launcher", cost:1300, dmg:1, fireRate:1600, spread:0.05, mag:5, range:360, reload:2.4, proj:1, splash:48, pspeed:110, lob:true, desc:"Lobbed grenade — very slow, flies over terrain, ~3-tile splat." },
@@ -266,7 +266,7 @@ class Game {
     const jet = p.equip.gadget==='jetpack';
     const _ct=this.classTierOf(p); let _spd=cls.speed*SPEED_SCALE;
     if(p.cls==='Scout') _spd*=(1+(_ct-1)*0.10); else if(p.cls==='Infiltrator') _spd*=(1+(_ct-1)*0.07);
-    if(p.ultActive==='speed') _spd*=1.14;
+    if(p.ultActive==='speed') _spd*=1.5;
     if(w.melee) _spd*=(1.3+(_T-1)*0.06);   // spray can: super fast base (+30%), +6% per upgrade tier
     return { hp:1, speed:_spd, color:cls.color, deflect:Math.min(0.8,deflect),
       dmg:1, fireRate, spread, mag, reload, proj, range, splash:w.splash||0, pspeed:w.pspeed||BALL_SPEED, scope:!!w.scope, lob:!!w.lob, melee:!!w.melee, botReach,
@@ -431,7 +431,7 @@ class Game {
     do{ tx=rand(80,ARENA.w-80); ty=rand(80,ARENA.h-80); tries++; } while(Math.hypot(tx-f.x,ty-f.y)<minD && tries<50);
     this.emit({type:'teleport',id:f.id,fx:Math.round(f.x),fy:Math.round(f.y),tx:Math.round(tx),ty:Math.round(ty)}); f.x=tx; f.y=ty; this.collide(f); f.evacT=0; }
   autoMelee(p,st){ if(!p.alive||p.cool>0) return; const R=st.botReach||0; if(R<=0) return; let best=null,bd=R*R;
-    for(const b of this.bots){ if(!b.alive||b.team===p.team) continue; const dd=dist2(p.x,p.y,b.x,b.y); if(dd<bd){ bd=dd; best=b; } }
+    for(const b of this.bots){ if(!b.alive||b.team===p.team) continue; const dd=dist2(p.x,p.y,b.x,b.y); if(dd<bd && this.clearShot(p.x,p.y,b.x,b.y,false)){ bd=dd; best=b; } }
     if(best){ p.cool=st.fireRate/1000; p.firedT=this.clock; if(!p.bot&&p.key) this.statBucket(p).shots++; this.emit({type:'melee',x:Math.round(p.x),y:Math.round(p.y),a:+Math.atan2(best.y-p.y,best.x-p.x).toFixed(2),team:p.team}); this.applyDamage(best,1,p,false); } }
   startReload(f){ if(!f||!f.alive||f.reloading) return; const st=this.stats(f); if((f.clip==null?st.mag:f.clip)>=st.mag) return; const unlimited=(this.mode==='invaders')||f.bot; if(!unlimited && f.ammo<=0) return; f.reloading=true; f.reloadT=st.reload||1.5; }
   fire(f){
@@ -440,7 +440,7 @@ class Game {
     if(st.melee){ f.cool=st.fireRate/1000; f.firedT=this.clock; if(f.ultActive==='invis'){ f.ultActive=null; f.ultT=0; } if(!f.bot && f.key) this.statBucket(f).shots++;   // Scout melee: a single "death square" in the facing direction (not all around)
       const tx=f.x+Math.cos(f.aim)*TILE, ty=f.y+Math.sin(f.aim)*TILE, R=TILE*0.8;
       this.emit({type:'melee',x:Math.round(tx),y:Math.round(ty),a:+f.aim.toFixed(2),team:f.team});
-      let best=null,bd=R*R; for(const e of [...this.players.values(),...this.bots]){ if(!e.alive||e.team===f.team) continue; const dd=dist2(tx,ty,e.x,e.y); if(dd<bd){ bd=dd; best=e; } }
+      let best=null,bd=R*R; for(const e of [...this.players.values(),...this.bots]){ if(!e.alive||e.team===f.team) continue; const dd=dist2(tx,ty,e.x,e.y); if(dd<bd && this.clearShot(f.x,f.y,e.x,e.y,false)){ bd=dd; best=e; } }
       if(best) this.applyDamage(best,1,f,false); return; }
     const unlimited=(this.mode==='invaders')||f.bot;
     if(!unlimited && f.ammo<=0) return;                          // dry: round pool spent (refills next round)
