@@ -47,7 +47,7 @@ const MAXTIER=5, BOT_TIER=3, SNIPER_BLIND=160; const TIER_COST={2:600,3:1200,4:2
 const HEAVY_CLASSES=['VetTrooper','HeavyWeapons','Officer'];
 function weightCapacity(level){ return 8 + Math.floor(level/5)*2; }
 const LEVELUP_BONUS=20;                 // coins per level gained
-const BUILD='hvpb-2026.06.14.27';        // bump on each change; shown in-game to verify deploys
+const BUILD='hvpb-2026.06.14.28';        // bump on each change; shown in-game to verify deploys
 
 // progression
 const CLASS_UNLOCK_LEVEL=10, LVL_BASE=2, LVL_STEP=1;
@@ -66,13 +66,13 @@ const CLASSES = {
   HeavyWeapons:{hp:175, speed:130, color:'#ff8c42', defWeapon:'minigun',
                 weapons:['minigun','bazooka','grenade_launcher','shotgun','pball_rifle'], gear:['mine'],
                 desc:"Walking tank. Minigun & bazooka, heavy armor." },
-  Scout:      { hp:80,  speed:240, color:'#9b5de5', defWeapon:'auto_pistol', ult:'speed',
+  Scout:      { hp:80,  speed:240, color:'#9b5de5', defWeapon:'auto_pistol', ult:'speed', ultWeapon:'pest_control',
                 weapons:['pest_control','auto_pistol','pball_gun'], gear:['jetpack','mine'],
                 desc:"Fast recon. Vision gear & jetpack." },
-  Infiltrator:{ hp:90,  speed:205, color:'#06d6a0', defWeapon:'blowgun', ult:'invis',
+  Infiltrator:{ hp:90,  speed:205, color:'#06d6a0', defWeapon:'blowgun', ult:'invis', ultWeapon:'blowgun',
                 weapons:['blowgun','auto_pistol','pball_gun'], gear:['mine','decoy'],
                 desc:"Silent stealth. Camo, blowgun, mines." },
-  Sniper:     { hp:80,  speed:160, color:'#ef476f', defWeapon:'sniper_rifle', ult:'evac',
+  Sniper:     { hp:80,  speed:160, color:'#ef476f', defWeapon:'sniper_rifle', ult:'evac', ultWeapon:'sniper_rifle',
                 weapons:['sniper_rifle','pball_rifle'], gear:['mine'],
                 desc:"Long-range one-shot specialist." },
   Engineer:   { hp:115, speed:170, color:'#ffd166', defWeapon:'pball_gun',
@@ -96,7 +96,7 @@ const WEAPONS = {
   shotgun:      { name:"Shotgun",          cost:800,  dmg:1, fireRate:1000, spread:0.32, mag:15, range:190, reload:1.9, proj:3, desc:"3-pellet spread, very short range." },
   blowgun:      { name:"Blowgun",          cost:600,  dmg:1, fireRate:880, spread:0.025,mag:20, range:360, reload:1.5, proj:1, silent:true, desc:"Silent darts, medium range." },
   auto_pistol:  { name:"Auto Pistol",      cost:500,  dmg:1, fireRate:480, spread:0.05, mag:20, range:250, reload:1.2, proj:1, desc:"Quick, light, short range." },
-  pest_control: { name:"Pest Control",     cost:0,    dmg:1, fireRate:300, spread:0,    mag:999,range:66,  reload:0.1, proj:1, melee:true, desc:"Scout melee swatter. Lethal point-blank, useless at range. No ammo, no reload." },
+  pest_control: { name:"Pest Control",     cost:0,    dmg:1, fireRate:300, spread:0,    mag:999,range:66,  reload:0.1, proj:1, melee:true, desc:"Scout melee: one-square reach vs players. Auto-splats nearby bots; upgrades extend that range and boost your speed." },
 };
 const WEAPON_MODS = {
   magazine: { name:"Magazine",    cost:900,  wt:2, ammo:30, desc:"+30 paintballs to your round pool." },
@@ -253,6 +253,8 @@ class Game {
     const cls=CLASSES[p.cls]; const w=this.weaponOf(p);
     let fireRate=w.fireRate, range=w.range, spread=w.spread, proj=w.proj||1, mag=w.mag, reload=w.reload;
     const _T=this.tierOf(p,p.equip.weapon); fireRate*=(1+(MAXTIER-_T)*0.15); range*=(1-(MAXTIER-_T)*0.08);   // tier: faster fire + longer range as you upgrade
+    let botReach=0;
+    if(w.melee){ range=Math.round(1.05*TILE); fireRate=w.fireRate; botReach=(1.4+(_T-1)*0.65)*TILE; }   // Pest Control: fixed ~1-square reach vs players; upgrades grow the bot auto-splat aura
     let ammoMul=1, ammoPool=BASE_AMMO, golden=false, weight=WEAPON_WT;
     for(const m of (p.equip.wmods||[])){ const md=WEAPON_MODS[m]; if(!md) continue; weight+=md.wt||0;
       if(md.ammo) ammoPool+=md.ammo; if(md.rangeMul) range*=md.rangeMul; if(md.fireMul) fireRate*=md.fireMul;
@@ -265,8 +267,9 @@ class Game {
     const _ct=this.classTierOf(p); let _spd=cls.speed*SPEED_SCALE;
     if(p.cls==='Scout') _spd*=(1+(_ct-1)*0.10); else if(p.cls==='Infiltrator') _spd*=(1+(_ct-1)*0.07);
     if(p.ultActive==='speed') _spd*=1.9;
+    if(w.melee) _spd*=(1.3+(_T-1)*0.06);   // spray can: super fast base (+30%), +6% per upgrade tier
     return { hp:1, speed:_spd, color:cls.color, deflect:Math.min(0.8,deflect),
-      dmg:1, fireRate, spread, mag, reload, proj, range, splash:w.splash||0, pspeed:w.pspeed||BALL_SPEED, scope:!!w.scope, lob:!!w.lob, melee:!!w.melee,
+      dmg:1, fireRate, spread, mag, reload, proj, range, splash:w.splash||0, pspeed:w.pspeed||BALL_SPEED, scope:!!w.scope, lob:!!w.lob, melee:!!w.melee, botReach,
       ammoMul, ammoPool, golden, reveal, sat, camoN:Math.min(MAX_CAMO,camoN), weight, jetpack:jet };
   }
 
@@ -416,7 +419,9 @@ class Game {
 
   // ---- combat ----
   armGolden(f){ if(!f||!f.alive) return; const st=this.stats(f); if(st.golden && (f.goldenCD||0)<=0) f.goldenArmed=true; }
-  useUlt(id){ const p=this.players.get(id); if(!p||p.bot||!p.alive||this.phase!=='active'||!p.ultReady) return; const ult=CLASSES[p.cls]&&CLASSES[p.cls].ult; if(!ult) return;
+  useUlt(id){ const p=this.players.get(id); if(!p||p.bot||!p.alive||this.phase!=='active') return; const C=CLASSES[p.cls]; const ult=C&&C.ult; if(!ult) return;
+    if(C.ultWeapon && p.equip.weapon!==C.ultWeapon) return;   // ability is tied to the class signature weapon
+    if(!p.ultReady) return;
     p.ultReady=false;
     if(ult==='evac'){ p.evacT=3.0; this.emit({type:'ult',k:'evac',id:p.id,x:Math.round(p.x),y:Math.round(p.y)}); }
     else if(ult==='speed'){ p.ultActive='speed'; p.ultT=10.0; this.emit({type:'ult',k:'speed',id:p.id}); }
@@ -425,6 +430,9 @@ class Game {
   evacTeleport(f){ const minD=10*TILE; let tx=f.x,ty=f.y,tries=0;
     do{ tx=rand(80,ARENA.w-80); ty=rand(80,ARENA.h-80); tries++; } while(Math.hypot(tx-f.x,ty-f.y)<minD && tries<50);
     this.emit({type:'teleport',id:f.id,fx:Math.round(f.x),fy:Math.round(f.y),tx:Math.round(tx),ty:Math.round(ty)}); f.x=tx; f.y=ty; this.collide(f); f.evacT=0; }
+  autoMelee(p,st){ if(!p.alive||p.cool>0) return; const R=st.botReach||0; if(R<=0) return; let best=null,bd=R*R;
+    for(const b of this.bots){ if(!b.alive||b.team===p.team) continue; const dd=dist2(p.x,p.y,b.x,b.y); if(dd<bd){ bd=dd; best=b; } }
+    if(best){ p.cool=st.fireRate/1000; p.firedT=this.clock; if(!p.bot&&p.key) this.statBucket(p).shots++; this.emit({type:'melee',x:Math.round(p.x),y:Math.round(p.y),a:+Math.atan2(best.y-p.y,best.x-p.x).toFixed(2),team:p.team}); this.applyDamage(best,1,p,false); } }
   startReload(f){ if(!f||!f.alive||f.reloading) return; const st=this.stats(f); if((f.clip==null?st.mag:f.clip)>=st.mag) return; const unlimited=(this.mode==='invaders')||f.bot; if(!unlimited && f.ammo<=0) return; f.reloading=true; f.reloadT=st.reload||1.5; }
   fire(f){
     if(!f.alive||f.cool>0||f.reloading) return;
@@ -672,7 +680,7 @@ class Game {
     for(const p of this.players.values()){ if(!p.alive) continue; const st=this.stats(p);
       const m=Math.hypot(p.input.mx,p.input.my)||1;
       if(p.input.mx||p.input.my){ const mult=st.jetpack?1:SPEED_MULT[this.terrainCode(p.x,p.y)]; const sp=st.speed*mult; p.x+=p.input.mx/m*sp*dt; p.y+=p.input.my/m*sp*dt; }
-      p.aim=p.input.aim; this.collide(p); if(p.input.reload) this.startReload(p); if(p.input.fire) this.fire(p); }
+      p.aim=p.input.aim; this.collide(p); if(p.input.reload) this.startReload(p); if(p.input.fire) this.fire(p); if(st.melee) this.autoMelee(p,st); }
     for(const b of this.bots){ if(b.alive) this.updateAI(b,dt); }
     const all=[...this.players.values(),...this.bots];
     for(const f of all){ if(f.cool>0) f.cool-=dt; if(f.goldenCD>0) f.goldenCD-=dt;

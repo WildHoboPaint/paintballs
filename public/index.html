@@ -249,7 +249,7 @@ if(IS_TOUCH) document.addEventListener('DOMContentLoaded',()=>document.body.clas
 let shopOpenedBy=null, activeTab='class', myLoadout=null, loadCfg=null, classUnlock=null;
 let lastBuy=null, pendingClass=null;
 let lobby=null, lobbyCanvas=null, freeCam={x:0,y:0}, storeCats=null;
-let actx=null, muted=false, prevAmmo=null, prevClip=null, prevDowned=false, bannerT=null; let peek=false; let myPos=null, srvPos=null; let chat=[]; let shake=0, hitMarkerT=0, myAim=0; const muzzles=[]; const CLIENT_BUILD='hvpb-2026.06.14.27';
+let actx=null, muted=false, prevAmmo=null, prevClip=null, prevDowned=false, bannerT=null; let peek=false; let myPos=null, srvPos=null; let chat=[]; let shake=0, hitMarkerT=0, myAim=0; const muzzles=[]; const CLIENT_BUILD='hvpb-2026.06.14.28';
 function aud(){ if(!actx){ try{ actx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } return actx; }
 function blip(type,freq,dur,vol,ramp){ if(muted) return; const a=aud(); if(!a) return; try{ const o=a.createOscillator(),g=a.createGain(); o.type=type; o.frequency.value=freq; if(ramp) o.frequency.exponentialRampToValueAtTime(Math.max(30,freq+ramp),a.currentTime+dur); g.gain.value=vol; g.gain.exponentialRampToValueAtTime(0.0001,a.currentTime+dur); o.connect(g); g.connect(a.destination); o.start(); o.stop(a.currentTime+dur); }catch(e){} }
 const sfx={
@@ -644,7 +644,12 @@ function hud(){
       $('ammo').innerHTML=(y.melee?`<span style="color:#9b5de5">⚔ MELEE</span>`:`AMMO ${rl?'<span style="color:#ffb84d">⟳ RELOADING</span>':(clip+' / '+cm)} <span style="opacity:.55">· pool ${pool}</span>`)+(y.ammoSel==='fast'?` · <span style="color:#ff6b6b">⚡Fast ${y.fastAmmo||0}</span>`:'')+(y.golden?` · <span style="color:#ffd700">${y.goldenArmed?'★ARMED':(y.goldenReady?'GOLD [F]':'gold…')}</span>`:''); }
     let gl=''; if(y.gadget==='mine') gl=`Mines: ${y.mineCharges} <span style="color:#8aa0b3">[G]</span>`; else if(y.gadget==='turret') gl=y.hasTurret?'Turret: deployed':'Turret ready <span style="color:#8aa0b3">[G]</span>'; else if(y.gadget==='jetpack') gl='Jetpack active'; else if(y.gadget==='decoy') gl=`Decoys: ${y.mineCharges||0} <span style="color:#8aa0b3">[G]</span>`; else gl='No gadget';
     $('gadgetline').innerHTML=gl;
-    { const ul=$('ultline'); if(ul){ let ut=''; if(y.ult){ const nm=({evac:'Emergency Evac',speed:'Speed Boost',invis:'Cloak'})[y.ult]||y.ult; if(y.evacT>0) ut=`<span style="color:#ffd166">⚡ EVAC ${y.evacT.toFixed(1)}s</span>`; else if(y.ultActive) ut=`<span style="color:#7ad7ff">⚡ ${nm.toUpperCase()} ${Math.ceil(y.ultT)}s</span>`; else if(y.ultReady) ut=`<span style="color:#9be36a">⚡ ${nm} READY [Space]</span>`; else ut=`<span style="color:#6f8499">⚡ ${nm} used</span>`; } ul.innerHTML=ut; } }
+    { const ul=$('ultline'); if(ul){ let ut=''; if(y.ult){ const nm=({evac:'Emergency Evac',speed:'Speed Boost',invis:'Cloak'})[y.ult]||y.ult; const uw=(classesInfo[y.cls]||{}).ultWeapon; const wn=(uw&&catalog&&catalog.weapon[uw])?catalog.weapon[uw].name:uw;
+      if(y.evacT>0) ut=`<span style="color:#ffd166">⚡ EVAC ${y.evacT.toFixed(1)}s</span>`;
+      else if(y.ultActive) ut=`<span style="color:#7ad7ff">⚡ ${nm.toUpperCase()} ${Math.ceil(y.ultT)}s</span>`;
+      else if(uw && y.equip && y.equip.weapon!==uw) ut=`<span style="color:#caa44a">⚡ ${nm}: equip ${wn}</span>`;
+      else if(y.ultReady) ut=`<span style="color:#9be36a">⚡ ${nm} READY [Space]</span>`;
+      else ut=`<span style="color:#6f8499">⚡ ${nm} used</span>`; } ul.innerHTML=ut; } }
     $('lvNum').textContent='Lv '+y.level; $('xpfill').style.width=clamp(y.xpInto/y.xpNeed,0,1)*100+'%';
     const tn=['Plains','Forest','Water','Mountain'][y.terrain]||''; $('terr').textContent='Terrain: '+tn+'  ·  one hit = out'+(y.cls!=='Trooper'?'':'  ·  Lv'+y.unlockLevel+' unlocks classes');
     $('topleft').innerHTML=`<div id="wallet">💰 ${y.money} Paint Coins</div>`+(s.pot>0?`<div id="pot">Pot: 💰 ${s.pot}${y.anteIn?' (you anted)':''}</div>`:'')+`Your splats: <b style="color:#fff">${y.kills}</b>`;
