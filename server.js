@@ -64,7 +64,10 @@ const httpServer = http.createServer((req, res) => {
 
   fs.readFile(file, (err, data) => {
     if (err) { res.writeHead(404, {'Content-Type':'text/plain'}); return res.end('Not found'); }
-    res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream' });
+    const ext = path.extname(file);
+    const headers = { 'Content-Type': MIME[ext] || 'application/octet-stream' };
+    headers['Cache-Control'] = (ext === '.html') ? 'no-cache, no-store, must-revalidate' : 'public, max-age=300';  // always serve the freshest client; let assets cache briefly
+    res.writeHead(200, headers);
     res.end(data);
   });
 });

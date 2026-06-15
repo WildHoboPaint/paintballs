@@ -47,7 +47,7 @@ const MAXTIER=5, BOT_TIER=3, SNIPER_BLIND=160; const TIER_COST={2:600,3:1200,4:2
 const HEAVY_CLASSES=['VetTrooper','HeavyWeapons','Officer'];
 function weightCapacity(level){ return 8 + Math.floor(level/5)*2; }
 const LEVELUP_BONUS=20;                 // coins per level gained
-const BUILD='hvpb-2026.06.14.28';        // bump on each change; shown in-game to verify deploys
+const BUILD='hvpb-2026.06.14.30';        // bump on each change; shown in-game to verify deploys
 
 // progression
 const CLASS_UNLOCK_LEVEL=10, LVL_BASE=2, LVL_STEP=1;
@@ -266,7 +266,7 @@ class Game {
     const jet = p.equip.gadget==='jetpack';
     const _ct=this.classTierOf(p); let _spd=cls.speed*SPEED_SCALE;
     if(p.cls==='Scout') _spd*=(1+(_ct-1)*0.10); else if(p.cls==='Infiltrator') _spd*=(1+(_ct-1)*0.07);
-    if(p.ultActive==='speed') _spd*=1.9;
+    if(p.ultActive==='speed') _spd*=1.14;
     if(w.melee) _spd*=(1.3+(_T-1)*0.06);   // spray can: super fast base (+30%), +6% per upgrade tier
     return { hp:1, speed:_spd, color:cls.color, deflect:Math.min(0.8,deflect),
       dmg:1, fireRate, spread, mag, reload, proj, range, splash:w.splash||0, pspeed:w.pspeed||BALL_SPEED, scope:!!w.scope, lob:!!w.lob, melee:!!w.melee, botReach,
@@ -783,7 +783,7 @@ class Game {
         level:li.level, xpInto:li.into, xpNeed:li.need, unlockLevel:CLASS_UNLOCK_LEVEL, classUnlocked:li.level>=CLASS_UNLOCK_LEVEL,
         deflect:st.deflect, zone:me.zone||null, equip:me.equip, owned:this.ownedSet(me.key), inv:this.inv[me.key]||{}, fastAmmo:((this.ammoStock[me.key]||{}).fast||0), ammoSel:(me.equip.ammo||'none'), mineCharges:me.mineCharges, hasTurret:me.hasTurret, gadget:me.equip.gadget, weight:st.weight, weightCap:weightCapacity(li.level), golden:st.golden, goldenReady:(me.goldenCD||0)<=0, goldenArmed:!!me.goldenArmed, anteAmt:me.anteAmt||100, wantAnte:me.wantAnte, ready:me.ready!==false, modeVotes:me.modeVotes||{}, tiers:this.tiers[me.key]||{}, classTiers:this.classTiers[me.key]||{}, classTier:this.classTierOf(me), ult:(CLASSES[me.cls]&&CLASSES[me.cls].ult)||null, ultReady:!!me.ultReady, ultActive:me.ultActive||null, ultT:Math.max(0,me.ultT||0), evacT:Math.max(0,me.evacT||0), spd:Math.round(st.speed*(me.equip.gadget==='jetpack'?1:(SPEED_MULT[this.terrainCode(me.x,me.y)]||1))) }; }
     let stage=null; if(lobby){ stage=this.stageRect(); stage.zones=this.stageZones(stage); stage.record=this.waveRecord; }
-    return { t:'state', you, fighters:out, radar, balls:this.balls.filter(b=>!me||((b.x-me.x)*(b.x-me.x)+(b.y-me.y)*(b.y-me.y))<1600*1600).map(b=>({x:Math.round(b.x),y:Math.round(b.y),c:b.color})),
+    return { t:'state', you, fighters:out, radar, balls:this.balls.filter(b=>{ if(!me) return true; const R=(WEAPONS[me.equip.weapon]&&WEAPONS[me.equip.weapon].scope)?2800:1600; return ((b.x-me.x)*(b.x-me.x)+(b.y-me.y)*(b.y-me.y))<R*R; }).map(b=>({x:Math.round(b.x),y:Math.round(b.y),c:b.color})),
       turrets, mines, decoys, space:'arena', stage, phase:this.phase, phaseTimer:Math.max(0,Math.round(this.phaseTimer)),
       roundTime:Math.max(0,Math.round(this.roundTimer)), round:this.roundNum, roundsWon:this.roundsWon,
       alive:{blue:this.aliveCount('blue'),red:this.aliveCount('red')}, pot:this.pot, buyIn:BUY_IN,
