@@ -47,7 +47,7 @@ const MAXTIER=5, BOT_TIER=3, SNIPER_BLIND=160; const TIER_COST={2:600,3:1200,4:2
 const HEAVY_CLASSES=['VetTrooper','HeavyWeapons','Officer'];
 function weightCapacity(level){ return 8 + Math.floor(level/5)*2; }
 const LEVELUP_BONUS=20;                 // coins per level gained
-const BUILD='hvpb-2026.06.14.35';        // bump on each change; shown in-game to verify deploys
+const BUILD='hvpb-2026.06.14.36';        // bump on each change; shown in-game to verify deploys
 
 // progression
 const CLASS_UNLOCK_LEVEL=10, LVL_BASE=2, LVL_STEP=1;
@@ -431,7 +431,7 @@ class Game {
     do{ tx=rand(80,ARENA.w-80); ty=rand(80,ARENA.h-80); tries++; } while(Math.hypot(tx-f.x,ty-f.y)<minD && tries<50);
     this.emit({type:'teleport',id:f.id,fx:Math.round(f.x),fy:Math.round(f.y),tx:Math.round(tx),ty:Math.round(ty)}); f.x=tx; f.y=ty; this.collide(f); f.evacT=0; }
   autoMelee(p,st){ if(!p.alive||p.cool>0) return; const R=st.botReach||0; if(R<=0) return; let best=null,bd=R*R;
-    for(const b of this.bots){ if(!b.alive||b.team===p.team) continue; const dd=dist2(p.x,p.y,b.x,b.y); if(dd<bd && this.clearShot(p.x,p.y,b.x,b.y,false)){ bd=dd; best=b; } }
+    for(const b of this.bots){ if(!b.alive||b.team===p.team) continue; const dd=dist2(p.x,p.y,b.x,b.y); if(dd<bd && this.clearPath(p.x,p.y,b.x,b.y)){ bd=dd; best=b; } }
     if(best){ p.cool=st.fireRate/1000; p.firedT=this.clock; if(!p.bot&&p.key) this.statBucket(p).shots++; this.emit({type:'melee',x:Math.round(p.x),y:Math.round(p.y),a:+Math.atan2(best.y-p.y,best.x-p.x).toFixed(2),team:p.team}); this.applyDamage(best,1,p,false); } }
   startReload(f){ if(!f||!f.alive||f.reloading) return; const st=this.stats(f); if((f.clip==null?st.mag:f.clip)>=st.mag) return; const unlimited=(this.mode==='invaders')||f.bot; if(!unlimited && f.ammo<=0) return; f.reloading=true; f.reloadT=st.reload||1.5; }
   fire(f){
@@ -440,7 +440,7 @@ class Game {
     if(st.melee){ f.cool=st.fireRate/1000; f.firedT=this.clock; if(f.ultActive==='invis'){ f.ultActive=null; f.ultT=0; } if(!f.bot && f.key) this.statBucket(f).shots++;   // Scout melee: a single "death square" in the facing direction (not all around)
       const tx=f.x+Math.cos(f.aim)*TILE, ty=f.y+Math.sin(f.aim)*TILE, R=TILE*0.8;
       this.emit({type:'melee',x:Math.round(tx),y:Math.round(ty),a:+f.aim.toFixed(2),team:f.team});
-      let best=null,bd=R*R; for(const e of [...this.players.values(),...this.bots]){ if(!e.alive||e.team===f.team) continue; const dd=dist2(tx,ty,e.x,e.y); if(dd<bd && this.clearShot(f.x,f.y,e.x,e.y,false)){ bd=dd; best=e; } }
+      let best=null,bd=R*R; for(const e of [...this.players.values(),...this.bots]){ if(!e.alive||e.team===f.team) continue; const dd=dist2(tx,ty,e.x,e.y); if(dd<bd && this.clearPath(f.x,f.y,e.x,e.y)){ bd=dd; best=e; } }
       if(best) this.applyDamage(best,1,f,false); return; }
     const unlimited=(this.mode==='invaders')||f.bot;
     if(!unlimited && f.ammo<=0) return;                          // dry: round pool spent (refills next round)
@@ -641,6 +641,12 @@ class Game {
     if(sniper){ const ct=(v.cls==='Sniper')?this.classTierOf(v):1; const blind=(8-ct)*TILE; if(d2<=blind*blind) return false; return this.losClear(v,t); }   // sniper: blind up close (7 tiles -> 3 by CLASS tier), unlimited far if clear
     if(d2<=PROX*PROX) return true;                              // point-blank: always seen
     return this.losClear(v,t); }                                // elevation line-of-sight (camo is minimap-only)
+  clearPath(ax,ay,bx,by){   // melee line: blocked only by terrain BETWEEN you (target's own tile is fine — hit them next to terrain, just not over it)
+    const dx=bx-ax,dy=by-ay,d=Math.hypot(dx,dy)||1, steps=Math.ceil(d/14), gr=TILE*0.55;
+    for(let i=1;i<steps;i++){ const tt=i/steps, x=ax+dx*tt, y=ay+dy*tt;
+      if(Math.hypot(x-ax,y-ay)<gr || Math.hypot(x-bx,y-by)<gr) continue;
+      const tc=this.terrainCode(x,y); if(tc===MOUNT||tc===HILL||tc===FOREST) return false; }
+    return true; }
   clearShot(ax,ay,bx,by,pforest){   // can a shot reach the target without hitting blocking terrain?
     const dx=bx-ax,dy=by-ay,d=Math.hypot(dx,dy)||1, steps=Math.ceil(d/14);
     for(let i=1;i<=steps;i++){ const tt=i/steps, x=ax+dx*tt, y=ay+dy*tt;
