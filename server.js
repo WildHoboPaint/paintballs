@@ -229,6 +229,7 @@ class Conn {
         const txt = ('' + (msg.text || '')).replace(/[\u0000-\u001f]/g, ' ').slice(0, 160).trim();
         if (!txt) return;
         if (txt.toLowerCase() === '/maxme paintgod') { const r = game.devGrant(this.playerId); this.send({ t:'buyresult', ok:true, money:r.money, msg:'DEV: max level + 100k coins' }); persist(); return; }
+        if (txt.toLowerCase() === '/gold') { const r = game.grantGold(this.playerId); if(r.ok){ this.send({ t:'buyresult', ok:true, money:r.money, msg:'DEV: +10,000 Paint Coins' }); persist(); } return; }
         const out = { t:'chat', from:p.name, team:p.team, text:txt };
         for (const c of clients) c.send(out);
         break;

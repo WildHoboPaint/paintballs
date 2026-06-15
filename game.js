@@ -47,7 +47,7 @@ const MAXTIER=5, BOT_TIER=3, SNIPER_BLIND=160; const TIER_COST={2:600,3:1200,4:2
 const HEAVY_CLASSES=['VetTrooper','HeavyWeapons','Officer'];
 function weightCapacity(level){ return 8 + Math.floor(level/5)*2; }
 const LEVELUP_BONUS=20;                 // coins per level gained
-const BUILD='hvpb-2026.06.14.40';        // bump on each change; shown in-game to verify deploys
+const BUILD='hvpb-2026.06.14.41';        // bump on each change; shown in-game to verify deploys
 
 // progression
 const CLASS_UNLOCK_LEVEL=10, LVL_BASE=2, LVL_STEP=1;
@@ -414,6 +414,7 @@ class Game {
     this.emit({type:'msg',text:`${p.name} upgraded ${p.cls} to Class Tier ${tc}.`});
     return {ok:true,money:this.getMoney(p),classTiers:m,msg:`Class Tier ${tc}`}; }
   devGrant(id){ const p=this.players.get(id); if(!p||!p.key) return {ok:false}; this.xp[p.key]=xpCum(99)+50; this.wallets[p.key]=(this.wallets[p.key]||0)+100000; this.emit({type:'msg',text:`${p.name} — DEV: max level + 100,000 coins.`}); return {ok:true,money:this.getMoney(p),level:99}; }
+  grantGold(id){ const p=this.players.get(id); if(!p||!p.key) return {ok:false}; this.wallets[p.key]=(this.wallets[p.key]||0)+10000; return {ok:true,money:this.getMoney(p)}; }
   setModeVote(id,mode,on){ const p=this.players.get(id); if(!p||!MODES.includes(mode)) return {ok:false}; if(!p.modeVotes) p.modeVotes={}; p.modeVotes[mode]=!!on; this.savePrefs(p); return {ok:true,modes:this.modeVoteState()}; }
   modeVoteState(){ const ps=[...this.players.values()]; const counts={}; for(const m of MODES) counts[m]=0; for(const p of ps){ const mv=p.modeVotes||{}; for(const m of MODES) if(mv[m]) counts[m]++; } const n=ps.length; const disabled=MODES.filter(m=> n>0 && counts[m]*2>n); return {list:MODES.slice(),counts,disabled,players:n}; }
 
