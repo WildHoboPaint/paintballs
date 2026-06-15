@@ -47,7 +47,7 @@ const MAXTIER=5, BOT_TIER=3, SNIPER_BLIND=160; const TIER_COST={2:600,3:1200,4:2
 const HEAVY_CLASSES=['VetTrooper','HeavyWeapons','Officer'];
 function weightCapacity(level){ return 8 + Math.floor(level/5)*2; }
 const LEVELUP_BONUS=20;                 // coins per level gained
-const BUILD='hvpb-2026.06.14.36';        // bump on each change; shown in-game to verify deploys
+const BUILD='hvpb-2026.06.14.40';        // bump on each change; shown in-game to verify deploys
 
 // progression
 const CLASS_UNLOCK_LEVEL=10, LVL_BASE=2, LVL_STEP=1;
@@ -94,7 +94,7 @@ const WEAPONS = {
   bazooka:      { name:"Rocket Launcher",  cost:1500, dmg:1, fireRate:2800,spread:0.03, mag:5,  range:600, reload:2.8, proj:1, splash:140, pspeed:130, desc:"Very slow to move & fire — huge area splat, blocked by terrain." },
   grenade_launcher:{ name:"Grenade Launcher", cost:1300, dmg:1, fireRate:1600, spread:0.05, mag:5, range:360, reload:2.4, proj:1, splash:48, pspeed:110, lob:true, desc:"Lobbed grenade — very slow, flies over terrain, ~3-tile splat." },
   shotgun:      { name:"Shotgun",          cost:800,  dmg:1, fireRate:1000, spread:0.32, mag:15, range:190, reload:1.9, proj:3, desc:"3-pellet spread, very short range." },
-  blowgun:      { name:"Blowgun",          cost:600,  dmg:1, fireRate:880, spread:0.025,mag:20, range:360, reload:1.5, proj:1, silent:true, desc:"Silent darts, medium range." },
+  blowgun:      { name:"Blowgun",          cost:600,  dmg:1, fireRate:450, spread:0.025,mag:20, range:360, reload:1.5, proj:1, silent:true, color:"#ff5fa2", desc:"Silent pink darts, fast and medium range." },
   auto_pistol:  { name:"Auto Pistol",      cost:500,  dmg:1, fireRate:480, spread:0.05, mag:20, range:250, reload:1.2, proj:1, desc:"Quick, light, short range." },
   pest_control: { name:"Pest Control",     cost:0,    dmg:1, fireRate:950, spread:0,    mag:999,range:66,  reload:0.1, proj:1, melee:true, desc:"Scout melee: one-square reach vs players. Auto-splats nearby bots; upgrades extend that range and boost your speed." },
 };
@@ -426,7 +426,7 @@ class Game {
     if(ult==='evac'){ p.evacT=3.0; this.emit({type:'ult',k:'evac',id:p.id,x:Math.round(p.x),y:Math.round(p.y)}); }
     else if(ult==='speed'){ p.ultActive='speed'; p.ultT=10.0; this.emit({type:'ult',k:'speed',id:p.id}); }
     else if(ult==='invis'){ p.ultActive='invis'; p.ultT=10.0; this.emit({type:'ult',k:'invis',id:p.id}); }
-    this.emit({type:'msg',text:`${p.name} used ${ult==='evac'?'Emergency Evac':ult==='speed'?'Speed Boost':'Cloak'}.`}); }
+    this.emit({type:'msg',team:p.team,teamOnly:true,text:`${p.name} used ${ult==='evac'?'Emergency Evac':ult==='speed'?'Speed Boost':'Cloak'}.`}); }
   evacTeleport(f){ const minD=10*TILE; let tx=f.x,ty=f.y,tries=0;
     do{ tx=rand(80,ARENA.w-80); ty=rand(80,ARENA.h-80); tries++; } while(Math.hypot(tx-f.x,ty-f.y)<minD && tries<50);
     this.emit({type:'teleport',id:f.id,fx:Math.round(f.x),fy:Math.round(f.y),tx:Math.round(tx),ty:Math.round(ty)}); f.x=tx; f.y=ty; this.collide(f); f.evacT=0; }
@@ -453,7 +453,7 @@ class Game {
     f.clip=Math.max(0,f.clip-1); if(f.clip<=0) this.startReload(f);   // spend a round from the magazine; auto-reload when empty
     if(!f.bot && f.key) this.statBucket(f).shots++;   // accuracy tracking (per trigger pull)
     let useFast=false; if(f.equip.ammo==='fast' && !f.bot && f.key){ const s=this.ammoStock[f.key]; if(s && (s.fast||0)>0){ s.fast--; useFast=true; } }
-    let pf=st.scope, lob=st.lob, range=st.range, proj=st.proj, bspeed=st.pspeed, col=paintColor(wdef,'normal'), splash=st.splash;
+    let pf=st.scope, lob=st.lob, range=st.range, proj=st.proj, bspeed=st.pspeed, col=(wdef.color||paintColor(wdef,'normal')), splash=st.splash;
     if(useFast){ bspeed*=AMMO.fast.speedMul; col=AMMO.fast.color; }
     if(useGolden){ f.goldenArmed=false; f.goldenCD=GOLDEN_CD; range=wdef.range*2.5; bspeed=210; col='#ffd700'; pf=true; lob=false; proj=1; splash=0; this.emit({type:'golden',x:Math.round(f.x),y:Math.round(f.y)}); }
     const reach=Math.min(range, (f.input&&f.input.aimDist>0)?f.input.aimDist:range);  // shoot short if you aim short
@@ -473,7 +473,7 @@ class Game {
   applyDamage(target,dmg,attacker,pierce){
     if(!target.alive) return;
     // One hit eliminates. Armor = chance the paintball bounces off (unless armor-piercing).
-    if(!pierce && Math.random() < this.deflectChance(target)){ this.emit({type:'deflect',x:target.x,y:target.y,c:'#e6edf3'}); return; }
+    if(!pierce && Math.random() < this.deflectChance(target)){ this.emit({type:'deflect',x:target.x,y:target.y,c:'#e6edf3',byId:attacker?attacker.id:0,vtId:target.id}); return; }
     if(target.shield>0){ target.shield--; this.emit({type:'deflect',x:target.x,y:target.y,c:'#ffd700'}); return; }   // super-bot soaks an extra hit
     target.alive=false; target.deaths++;
     if(this.mode==='ctf'){ for(const fl of this.flags) if(fl.carrier===target.id){ fl.carrier=null; fl.atHome=false; fl.dropT=20; fl.x=target.x; fl.y=target.y; } }
@@ -661,12 +661,19 @@ class Game {
     if(!ai.target||!ai.target.alive||ai.repath<=0){ ai.target=this.nearestEnemy(f); ai.repath=rand(0.4,0.9); }   // hunt nearest enemy even with no line of sight
     const seen=this.nearestVisibleEnemy(f);                                                                        // only shoot what you can actually see
     let mvx=0,mvy=0; const tgt=ai.target;
+    if(ai.modeT==null) ai.modeT=rand(1.5,4);                           // behavior phases so the swarm doesn't just ball up
+    ai.modeT-=dt;
+    if(ai.modeT<=0){ if(ai.mode==='roam'){ ai.mode='hunt'; ai.modeT=rand(2,5); } else if(Math.random()<0.35){ ai.mode='roam'; ai.modeT=rand(1.0,2.5); ai.roamDir=rand(0,6.28); } else { ai.modeT=rand(1.5,4); } }
     if(tgt){ const dx=tgt.x-f.x,dy=tgt.y-f.y,d=Math.hypot(dx,dy)||1;
-      if(d>f.r+10){ mvx+=dx/d; mvy+=dy/d; }                            // close the distance
-      ai.jitter-=dt; if(ai.jitter<=0){ ai.strafe*=-1; ai.jitter=rand(0.25,0.85); ai.strafeAmt=(Math.random()<0.4? rand(1.2,1.7) : rand(0.45,0.9)); }   // more side-to-side: stronger base weave + more frequent jukes
-      const sAmt=ai.strafeAmt||0.5; mvx+=-dy/d*ai.strafe*sAmt; mvy+=dx/d*ai.strafe*sAmt;     // varied strafe amplitude
-      ai.wander+=rand(-1,1)*dt*3.2; mvx+=Math.cos(ai.wander)*0.34; mvy+=Math.sin(ai.wander)*0.34;   // wander so it's not a straight magnet
       f.aim=Math.atan2((seen||tgt).y-f.y,(seen||tgt).x-f.x);
+      if(ai.mode==='roam'){ ai.roamDir+=rand(-1,1)*dt*1.6; mvx+=Math.cos(ai.roamDir); mvy+=Math.sin(ai.roamDir); if(d>620){ mvx+=dx/d*0.5; mvy+=dy/d*0.5; } }   // peel off / strafe away for a few seconds (drift back if too far)
+      else {
+        const so=ai.standoff||(ai.standoff=Math.min(rand(60,260), st.range*0.7));   // each bot holds its own engagement distance -> loose cloud, not a tight ball
+        if(d>so+25){ mvx+=dx/d; mvy+=dy/d; } else if(d<so-40){ mvx-=dx/d*0.8; mvy-=dy/d*0.8; }
+        ai.jitter-=dt; if(ai.jitter<=0){ ai.strafe*=-1; ai.jitter=rand(0.25,0.85); ai.strafeAmt=(Math.random()<0.4? rand(1.2,1.7) : rand(0.45,0.9)); }
+        const sAmt=ai.strafeAmt||0.5; mvx+=-dy/d*ai.strafe*sAmt; mvy+=dx/d*ai.strafe*sAmt;
+        ai.wander+=rand(-1,1)*dt*3.2; mvx+=Math.cos(ai.wander)*0.34; mvy+=Math.sin(ai.wander)*0.34;
+      }
     } else { const cx=ARENA.w/2, cy=ARENA.h/2, dx=cx-f.x, dy=cy-f.y, d=Math.hypot(dx,dy)||1;   // nobody left -> head to center
       if(d>60){ mvx=dx/d; mvy=dy/d; } else { mvx=Math.cos(ai.wander); mvy=Math.sin(ai.wander); ai.wander+=rand(-1,1)*dt; } f.aim=Math.atan2(dy,dx); }
     if(seen){ const sdx=seen.x-f.x, sdy=seen.y-f.y, sd=Math.hypot(sdx,sdy)||1; const pf=!!(WEAPONS[f.equip.weapon]&&WEAPONS[f.equip.weapon].scope);
@@ -796,7 +803,7 @@ class Game {
       alive:{blue:this.aliveCount('blue'),red:this.aliveCount('red')}, pot:this.pot, buyIn:BUY_IN,
       mode:this.mode, modeName:this.modeName(), tournament:this.tournament, caps:{...this.caps}, captureTarget:CAPTURE_TARGET, tourneyWins:TOURNEY_WINS, wave:this.invSession?this.invWave:0, superRound:this.superRound,
       flags:this.flags.map(fl=>({team:fl.team,x:Math.round(fl.x),y:Math.round(fl.y),home:fl.atHome,carried:!!fl.carrier})), anteOptions:ANTE_OPTIONS, modes:this.modeVoteState(),
-      events:events||[] };
+      events:(events||[]).filter(e=>!e.teamOnly||(me&&e.team===me.team)) };
   }
 }
 

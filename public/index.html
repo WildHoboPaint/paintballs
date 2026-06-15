@@ -249,7 +249,7 @@ if(IS_TOUCH) document.addEventListener('DOMContentLoaded',()=>document.body.clas
 let shopOpenedBy=null, activeTab='class', myLoadout=null, loadCfg=null, classUnlock=null;
 let lastBuy=null, pendingClass=null;
 let lobby=null, lobbyCanvas=null, freeCam={x:0,y:0}, storeCats=null;
-let actx=null, muted=false, prevAmmo=null, prevClip=null, prevDowned=false, bannerT=null; let peek=false; let myPos=null, srvPos=null; let chat=[]; let shake=0, hitMarkerT=0, myAim=0; const muzzles=[]; const CLIENT_BUILD='hvpb-2026.06.14.36';
+let actx=null, muted=false, prevAmmo=null, prevClip=null, prevDowned=false, bannerT=null; let peek=false; let myPos=null, srvPos=null; let chat=[]; let shake=0, hitMarkerT=0, myAim=0; const muzzles=[]; const CLIENT_BUILD='hvpb-2026.06.14.40';
 function aud(){ if(!actx){ try{ actx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } return actx; }
 function blip(type,freq,dur,vol,ramp){ if(muted) return; const a=aud(); if(!a) return; try{ const o=a.createOscillator(),g=a.createGain(); o.type=type; o.frequency.value=freq; if(ramp) o.frequency.exponentialRampToValueAtTime(Math.max(30,freq+ramp),a.currentTime+dur); g.gain.value=vol; g.gain.exponentialRampToValueAtTime(0.0001,a.currentTime+dur); o.connect(g); g.connect(a.destination); o.start(); o.stop(a.currentTime+dur); }catch(e){} }
 const sfx={
@@ -259,7 +259,8 @@ const sfx={
   boom:()=>{ blip('sawtooth',120,0.32,0.18,-90); blip('square',55,0.36,0.12,-25); },
   level:()=>[520,700,920].forEach((f,i)=>setTimeout(()=>blip('triangle',f,0.12,0.12),i*80)),
   win:()=>[523,659,784,1047].forEach((f,i)=>setTimeout(()=>blip('triangle',f,0.2,0.12),i*120)),
-  lose:()=>[392,311,247].forEach((f,i)=>setTimeout(()=>blip('sawtooth',f,0.22,0.1),i*140))
+  lose:()=>[392,311,247].forEach((f,i)=>setTimeout(()=>blip('sawtooth',f,0.22,0.1),i*140)),
+  bounce:()=>{ blip('triangle',1300,0.07,0.09,300); blip('sine',1900,0.05,0.05); }
 };
 function addShake(a){ shake=Math.min(24, shake+a); }
 function showBanner(text,color){ const b=$('rbanner'); b.textContent=text; b.style.color=color; b.classList.remove('hidden'); clearTimeout(bannerT); bannerT=setTimeout(()=>b.classList.add('hidden'),3000); }
@@ -355,6 +356,7 @@ function handleEvent(ev){
   else if(ev.type==='ult'){ if(ev.id===myId) sfx.level(); }
   else if(ev.type==='teleport'){ addSplashBlob(ev.fx,ev.fy,20,'#ffd166'); addSplashBlob(ev.tx,ev.ty,20,'#ffd166'); sfx.boom(); const v=view.get(ev.id); if(v){ v.x=ev.tx; v.y=ev.ty; } if(ev.id===myId && myPos){ myPos.x=ev.tx; myPos.y=ev.ty; if(srvPos){ srvPos.x=ev.tx; srvPos.y=ev.ty; } } }
   else if(ev.type==='boom'){ addSplat(ev.x,ev.y,'#ffd166'); addSplat(ev.x,ev.y,'#ff8c42'); sfx.boom(); }
+  else if(ev.type==='deflect'){ if(ev.byId===myId || ev.vtId===myId){ sfx.bounce(); toast(ev.vtId===myId?'🛡 Bounce! Their shot deflected off your armor':'🛡 Your shot bounced off their armor'); } }
   else if(ev.type==='elim'){ feed.unshift({by:ev.by,byId:ev.byId,byTeam:ev.byTeam,vt:ev.vt,vtTeam:ev.vtTeam,rew:ev.rew||0,xp:ev.xp||0,t:5}); if(feed.length>6)feed.pop();
     if(ev.byId===myId){ sfx.splat(); hitMarkerT=0.3; addShake(4); if(ev.rew) toast('Splat! +'+ev.rew+' Paint Coins · +'+ev.xp+' XP'); }
     if(ev.vtId===myId){ sfx.hurt(); addShake(16); } }
