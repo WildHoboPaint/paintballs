@@ -249,7 +249,7 @@ if(IS_TOUCH) document.addEventListener('DOMContentLoaded',()=>document.body.clas
 let shopOpenedBy=null, activeTab='class', myLoadout=null, loadCfg=null, classUnlock=null;
 let lastBuy=null, pendingClass=null;
 let lobby=null, lobbyCanvas=null, freeCam={x:0,y:0}, storeCats=null;
-let actx=null, muted=false, prevAmmo=null, prevClip=null, prevDowned=false, bannerT=null; let peek=false; let myPos=null, srvPos=null; let chat=[]; let shake=0, hitMarkerT=0, myAim=0; const muzzles=[]; const CLIENT_BUILD='hvpb-2026.06.14.30';
+let actx=null, muted=false, prevAmmo=null, prevClip=null, prevDowned=false, bannerT=null; let peek=false; let myPos=null, srvPos=null; let chat=[]; let shake=0, hitMarkerT=0, myAim=0; const muzzles=[]; const CLIENT_BUILD='hvpb-2026.06.14.33';
 function aud(){ if(!actx){ try{ actx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } return actx; }
 function blip(type,freq,dur,vol,ramp){ if(muted) return; const a=aud(); if(!a) return; try{ const o=a.createOscillator(),g=a.createGain(); o.type=type; o.frequency.value=freq; if(ramp) o.frequency.exponentialRampToValueAtTime(Math.max(30,freq+ramp),a.currentTime+dur); g.gain.value=vol; g.gain.exponentialRampToValueAtTime(0.0001,a.currentTime+dur); o.connect(g); g.connect(a.destination); o.start(); o.stop(a.currentTime+dur); }catch(e){} }
 const sfx={
@@ -505,6 +505,7 @@ function draw(){
   // decoys (faded)
   if(snap.decoys) for(const d of snap.decoys){ ctx.globalAlpha=0.5; drawBody({x:d.x,y:d.y,a:0,ref:{tm:d.tm,cls:d.cls,hp:1,mh:1,id:-1,n:'?'}}); ctx.globalAlpha=1; }
   for(const [id,v] of view){ if(v.ref&&v.ref.al) drawFighter(v); }
+  if(snap.you && snap.you.melee && snap.you.alive && myPos){ const tx=myPos.x+Math.cos(myAim)*32, ty=myPos.y+Math.sin(myAim)*32; ctx.strokeStyle='rgba(155,93,229,.8)'; ctx.lineWidth=2; ctx.setLineDash([5,4]); ctx.strokeRect(tx-16,ty-16,32,32); ctx.setLineDash([]); }
   for(const b of snap.balls){ ctx.fillStyle=b.c; ctx.beginPath(); ctx.arc(b.x,b.y,5,0,7); ctx.fill(); }
   for(const mz of muzzles){ const al=Math.max(0,mz.t/0.07); ctx.globalAlpha=al; ctx.fillStyle='#fff3b0'; const fx=mz.x+Math.cos(mz.a)*16, fy=mz.y+Math.sin(mz.a)*16; ctx.beginPath(); ctx.arc(fx,fy,5+al*5,0,7); ctx.fill(); } ctx.globalAlpha=1;
   if(snap.flags) for(const fl of snap.flags){ const col=fl.team==='blue'?'#3da9fc':'#ff5470';
@@ -713,7 +714,7 @@ function buildGrid(){
   if(!snap||!snap.you||!catalog) return; const y=snap.you; if(!myLoadout) syncLoadout(); const grid=$('grid'); grid.innerHTML='';
   const cap=y.weightCap||12, curW=myLoadout?ldWeight(myLoadout):0;
   if(activeTab!=='modes') grid.appendChild(ldSummary(y));
-  if(snap.phase==='active' && activeTab!=='modes'){ const w=document.createElement('div'); w.className='item lock'; w.innerHTML='<div class="in"><span>\uD83D\uDD12 Loadout locked</span></div><div class="id">Gear changes only between rounds, in the holding area. (Mode voting still works.)</div>'; grid.appendChild(w); return; }
+  if(snap.phase==='active' && snap.you.alive && activeTab!=='modes'){ const w=document.createElement('div'); w.className='item lock'; w.innerHTML='<div class="in"><span>\uD83D\uDD12 Loadout locked</span></div><div class="id">Gear changes only between rounds, in the holding area. (Mode voting still works.)</div>'; grid.appendChild(w); return; }
   if(activeTab==='class'){
     { const CTc={2:600,3:1200,4:2000,5:3000}; const perks={Sniper:'Sharper vision: fewer blind squares up close.',Scout:'Faster movement speed.',Infiltrator:'Faster movement speed (longer invisibility coming soon).'};
       if(perks[y.cls]){ const ct=(y.classTiers&&y.classTiers[y.cls])||y.classTier||1;

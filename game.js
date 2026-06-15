@@ -47,7 +47,7 @@ const MAXTIER=5, BOT_TIER=3, SNIPER_BLIND=160; const TIER_COST={2:600,3:1200,4:2
 const HEAVY_CLASSES=['VetTrooper','HeavyWeapons','Officer'];
 function weightCapacity(level){ return 8 + Math.floor(level/5)*2; }
 const LEVELUP_BONUS=20;                 // coins per level gained
-const BUILD='hvpb-2026.06.14.30';        // bump on each change; shown in-game to verify deploys
+const BUILD='hvpb-2026.06.14.33';        // bump on each change; shown in-game to verify deploys
 
 // progression
 const CLASS_UNLOCK_LEVEL=10, LVL_BASE=2, LVL_STEP=1;
@@ -96,7 +96,7 @@ const WEAPONS = {
   shotgun:      { name:"Shotgun",          cost:800,  dmg:1, fireRate:1000, spread:0.32, mag:15, range:190, reload:1.9, proj:3, desc:"3-pellet spread, very short range." },
   blowgun:      { name:"Blowgun",          cost:600,  dmg:1, fireRate:880, spread:0.025,mag:20, range:360, reload:1.5, proj:1, silent:true, desc:"Silent darts, medium range." },
   auto_pistol:  { name:"Auto Pistol",      cost:500,  dmg:1, fireRate:480, spread:0.05, mag:20, range:250, reload:1.2, proj:1, desc:"Quick, light, short range." },
-  pest_control: { name:"Pest Control",     cost:0,    dmg:1, fireRate:300, spread:0,    mag:999,range:66,  reload:0.1, proj:1, melee:true, desc:"Scout melee: one-square reach vs players. Auto-splats nearby bots; upgrades extend that range and boost your speed." },
+  pest_control: { name:"Pest Control",     cost:0,    dmg:1, fireRate:950, spread:0,    mag:999,range:66,  reload:0.1, proj:1, melee:true, desc:"Scout melee: one-square reach vs players. Auto-splats nearby bots; upgrades extend that range and boost your speed." },
 };
 const WEAPON_MODS = {
   magazine: { name:"Magazine",    cost:900,  wt:2, ammo:30, desc:"+30 paintballs to your round pool." },
@@ -219,7 +219,7 @@ class Game {
     f.equip={weapon:f.equip.weapon,wmods,chips,gadget:gad,ammo:'none'};
     f.mineCharges=(GADGETS[gad]&&GADGETS[gad].charges)||0; f.decoyCharges=gad==='decoy'?GADGETS.decoy.charges:0; }
   tierOf(p,wid){ if(p.bot) return BOT_TIER; const m=this.tiers[p.key]; return (m&&m[wid])||1; }
-  upgradeWeapon(id,wid){ const p=this.players.get(id); if(!p||p.bot) return {ok:false}; if(this.phase==='active') return {ok:false,msg:'Locked during the round.'}; if(!WEAPONS[wid]) return {ok:false,msg:'no such weapon'};
+  upgradeWeapon(id,wid){ const p=this.players.get(id); if(!p||p.bot) return {ok:false}; if(this.phase==='active' && p.alive) return {ok:false,msg:'Locked during the round.'}; if(!WEAPONS[wid]) return {ok:false,msg:'no such weapon'};
     if(!this.owns(p,'weapon',wid)) return {ok:false,money:this.getMoney(p),msg:'Unlock the weapon first'};
     const m=this.tiers[p.key]||(this.tiers[p.key]={}); const cur=m[wid]||1;
     if(cur>=MAXTIER) return {ok:false,money:this.getMoney(p),tiers:m,msg:'Already max tier'};
@@ -254,7 +254,7 @@ class Game {
     let fireRate=w.fireRate, range=w.range, spread=w.spread, proj=w.proj||1, mag=w.mag, reload=w.reload;
     const _T=this.tierOf(p,p.equip.weapon); fireRate*=(1+(MAXTIER-_T)*0.15); range*=(1-(MAXTIER-_T)*0.08);   // tier: faster fire + longer range as you upgrade
     let botReach=0;
-    if(w.melee){ range=Math.round(1.05*TILE); fireRate=w.fireRate; botReach=(1.4+(_T-1)*0.65)*TILE; }   // Pest Control: fixed ~1-square reach vs players; upgrades grow the bot auto-splat aura
+    if(w.melee){ range=Math.round(1.05*TILE); fireRate=w.fireRate; botReach=(1.2+(_T-1)*0.55)*TILE; }   // Pest Control: fixed ~1-square reach vs players; upgrades grow the bot auto-splat aura
     let ammoMul=1, ammoPool=BASE_AMMO, golden=false, weight=WEAPON_WT;
     for(const m of (p.equip.wmods||[])){ const md=WEAPON_MODS[m]; if(!md) continue; weight+=md.wt||0;
       if(md.ammo) ammoPool+=md.ammo; if(md.rangeMul) range*=md.rangeMul; if(md.fireMul) fireRate*=md.fireMul;
@@ -325,7 +325,7 @@ class Game {
     p.input.aim=+inp.aim||0; p.input.aimDist=Math.max(0,+inp.aimDist||0); p.input.fire=!!inp.fire; p.input.reload=!!inp.reload; if(inp.armGolden) this.armGolden(p); if(inp.deploy) this.deploy(p); if(inp.ult) this.useUlt(id);
     if(this.phase==='active' && (p.input.mx||p.input.my||p.input.fire)) p.activeThisRound=true; }
   setClass(id,cls){ const p=this.players.get(id); if(!p||!CLASSES[cls]) return {ok:false,msg:'bad class'};
-    if(this.phase==='active') return {ok:false,msg:'Locked during the round — switch in the holding area.'};
+    if(this.phase==='active' && p.alive) return {ok:false,msg:'Locked during the round. Switch in the holding area.'};
     const req=CLASS_UNLOCK[cls]||1; if(this.getLevel(p)<req) return {ok:false,msg:`${cls} unlocks at level ${req}`};
     const refund=this._refundClear(p);
     p.cls=cls; p.equip=this.defaultEquip(cls);
@@ -358,7 +358,7 @@ class Game {
   }
   applyLoadout(id,ld){
     const p=this.players.get(id); if(!p||!ld) return {ok:false,msg:'no player'};
-    if(this.phase==='active') return {ok:false,msg:'Locked during the round — change gear in the holding area.'};
+    if(this.phase==='active' && p.alive) return {ok:false,msg:'Locked during the round. Change gear in the holding area.'};
     const wid=(ld.weapon&&CATALOG.weapon[ld.weapon])?ld.weapon:p.equip.weapon;
     if(!this.owns(p,'weapon',wid)||!this.canEquip(p,'weapon',wid)) return {ok:false,msg:'weapon not available'};
     const wmods=Array.isArray(ld.wmods)?ld.wmods.filter(m=>WEAPON_MODS[m]).slice(0,WMOD_SLOTS):[];
@@ -384,7 +384,7 @@ class Game {
     for(const s of (this.owned[p.key]||[])){ const a=s.split(':'); const d=CATALOG[a[0]]&&CATALOG[a[0]][a[1]]; if(d) refund+=(d.cost||0); }
     this.inv[p.key]={}; this.owned[p.key]=[]; if(refund) this.addMoney(p,refund); return refund; }
   resetLoadout(id){ const p=this.players.get(id); if(!p||p.bot) return {ok:false};
-    if(this.phase==='active') return {ok:false,msg:'Locked during the round.'};
+    if(this.phase==='active' && p.alive) return {ok:false,msg:'Locked during the round.'};
     let refund=this._refundClear(p);   // sell back all gear / mods / chips
     let tref=0; const wt=this.tiers[p.key]||{}; for(const wid in wt){ for(let t=2;t<=wt[wid];t++) tref+=(wid==='pball_gun'?0:(TIER_COST[t]||0)); }
     const ct=this.classTiers[p.key]||{}; for(const cn in ct){ for(let t=2;t<=ct[cn];t++) tref+=(TIER_COST[t]||0); }
@@ -403,7 +403,7 @@ class Game {
     return { splats:top(s=>s.splats||0), psplats:top(s=>s.psplats||0),
       accuracy: arr.filter(s=>(s.shots||0)>=20).map(s=>({name:s.name||'?',val:Math.round(100*(s.splats||0)/(s.shots||1)),splats:s.splats||0,shots:s.shots||0})).filter(x=>x.val>0).sort((a,b)=>b.val-a.val).slice(0,5) }; }
   classTierOf(p){ if(p.bot) return 1; const m=this.classTiers[p.key]; return (m&&m[p.cls])||1; }
-  upgradeClass(id){ const p=this.players.get(id); if(!p||p.bot) return {ok:false}; if(this.phase==='active') return {ok:false,msg:'Locked during the round.'};
+  upgradeClass(id){ const p=this.players.get(id); if(!p||p.bot) return {ok:false}; if(this.phase==='active' && p.alive) return {ok:false,msg:'Locked during the round.'};
     if(!['Sniper','Scout','Infiltrator'].includes(p.cls)) return {ok:false,msg:'No class upgrade for this class yet'};
     const m=this.classTiers[p.key]||(this.classTiers[p.key]={}); const cur=m[p.cls]||1;
     if(cur>=MAXTIER) return {ok:false,money:this.getMoney(p),classTiers:m,msg:'Max class tier'};
@@ -437,9 +437,10 @@ class Game {
   fire(f){
     if(!f.alive||f.cool>0||f.reloading) return;
     const st=this.stats(f);
-    if(st.melee){ f.cool=st.fireRate/1000; f.firedT=this.clock; if(f.ultActive==='invis'){ f.ultActive=null; f.ultT=0; } if(!f.bot && f.key) this.statBucket(f).shots++;   // Scout melee: instant short-range hit, no ammo / no reload
-      this.emit({type:'melee',x:Math.round(f.x),y:Math.round(f.y),a:+f.aim.toFixed(2),team:f.team});
-      let best=null,bd=1e9; for(const e of [...this.players.values(),...this.bots]){ if(!e.alive||e.team===f.team) continue; const d=Math.hypot(e.x-f.x,e.y-f.y); if(d<=st.range+(e.r||14) && d<bd){ bd=d; best=e; } }
+    if(st.melee){ f.cool=st.fireRate/1000; f.firedT=this.clock; if(f.ultActive==='invis'){ f.ultActive=null; f.ultT=0; } if(!f.bot && f.key) this.statBucket(f).shots++;   // Scout melee: a single "death square" in the facing direction (not all around)
+      const tx=f.x+Math.cos(f.aim)*TILE, ty=f.y+Math.sin(f.aim)*TILE, R=TILE*0.8;
+      this.emit({type:'melee',x:Math.round(tx),y:Math.round(ty),a:+f.aim.toFixed(2),team:f.team});
+      let best=null,bd=R*R; for(const e of [...this.players.values(),...this.bots]){ if(!e.alive||e.team===f.team) continue; const dd=dist2(tx,ty,e.x,e.y); if(dd<bd){ bd=dd; best=e; } }
       if(best) this.applyDamage(best,1,f,false); return; }
     const unlimited=(this.mode==='invaders')||f.bot;
     if(!unlimited && f.ammo<=0) return;                          // dry: round pool spent (refills next round)
