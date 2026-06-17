@@ -35,6 +35,9 @@ const MODE_NAMES={tdm:'Team Deathmatch', ctf:'Capture the Flag', invaders:'Bot I
 const BOTS_PER_PLAYER=6;                               // Bot Invaders base swarm/wave
 const INV_STEP=2;                                      // +bots per player each survived wave
 const GOLD_BOT_CHANCE=0.02;                            // chance a TDM/CTF bot is Golden
+const ENG_COST={ bot:75, pellet_turret:150, grenade_turret:250, rocket_turret:350 };   // Engineer field-store prices (cheap; reset each round)
+const ENG_STORE_UP={ 2:400, 3:900 };                   // store upgrade costs (raises bot cap)
+const MORTAR_SHOTS=3, MORTAR_SPLASH=130, TURRET_HP=3;
 const SUPER_BOTS_PER_PLAYER=10;                        // Super Bot Invaders (golden trigger)
 const FAST_SPD_MUL=1.6;                                // fast bot speed multiplier
 const BOT_BONUS=10;                                    // coins per bot splatted (invaders survival reward)
@@ -48,7 +51,7 @@ const HEAVY_CLASSES=['VetTrooper','HeavyWeapons','Officer'];
 function weightCapacity(level){ return 10 + Math.floor(level/3)*2; }   // higher cap so two guns are viable; rewards leveling
 function modW(list){ let w=0; for(const m of (list||[])){ const d=WEAPON_MODS[m]; if(d) w+=d.wt||0; } return w; }
 const LEVELUP_BONUS=20;                 // coins per level gained
-const BUILD='hvpb-2026.06.14.49';        // bump on each change; shown in-game to verify deploys
+const BUILD='hvpb-2026.06.14.50';        // bump on each change; shown in-game to verify deploys
 
 // progression
 const CLASS_UNLOCK_LEVEL=10, LVL_BASE=2, LVL_STEP=1;
@@ -76,9 +79,9 @@ const CLASSES = {
   Sniper:     { hp:80,  speed:160, color:'#ef476f', defWeapon:'sniper_rifle', ult:'evac', ultWeapon:'sniper_rifle',
                 weapons:['sniper_rifle','pball_rifle'], gear:['mine'],
                 desc:"Long-range one-shot specialist." },
-  Engineer:   { hp:115, speed:170, color:'#ffd166', defWeapon:'pball_gun',
-                weapons:['pball_gun','shotgun','pball_rifle'], gear:['turret','grenade_turret','rocket_turret','mine'],
-                desc:"Builds turrets & lays mines." },
+  Engineer:   { hp:115, speed:170, color:'#ffd166', defWeapon:'pball_gun', ult:'mortar',
+                weapons:['pball_gun'], gear:['store'],
+                desc:"Field commander. Drop a store (G) to buy bots & turrets; man the Mortar (Space)." },
   Officer:    { hp:120, speed:185, color:'#3da9fc', defWeapon:'assault_rifle',
                 weapons:['assault_rifle','auto_pistol','pball_rifle'], gear:['turret'],
                 desc:"Command. Satellite vision, assault rifle." },
@@ -118,9 +121,8 @@ const ARMOR_CHIPS = {
 const GADGETS = {
   none:   { name:"No Gadget",  cost:0,    desc:"Empty gadget slot." },
   mine:   { name:"Paint Mines",cost:300,  charges:2, desc:"Press G to drop. Detonates on enemies (2/round)." },
-  turret: { name:"Auto Turret",cost:1200, desc:"Press G to deploy. Auto-fires paint. No timeout, but enemies can splat it." },
-  grenade_turret:{ name:"Grenade Turret",cost:1500, desc:"Engineer only. Lobs grenades (area splat) at enemies. Splattable." },
-  rocket_turret:{ name:"Rocket Turret",cost:1900, desc:"Engineer only. Fires fast rockets (big splat). Splattable." },
+  turret: { name:"Auto Turret",cost:1200, desc:"Press G to deploy a Pellet Turret. No timeout; destroyed by 3 hits." },
+  store:  { name:"Field Store",cost:0, desc:"Engineer: press G to drop a mobile store, then buy bots & turrets near it." },
   jetpack:{ name:"Jetpack",    cost:1500, passive:true, desc:"Ignore terrain slowdown (passive)." },
   decoy:  { name:"Decoy",      cost:400,  charges:2, desc:"Press G to drop a fake clone (2/round)." },
 };
@@ -173,7 +175,7 @@ class Game {
   constructor(saved){
     this.obstacles=buildObstacles();
     const T=generateTerrain(); this.grid=T.grid; this.tcols=T.cols; this.trows=T.rows; this.terrainMeta={cols:T.cols,rows:T.rows,tile:TILE};
-    this.players=new Map(); this.bots=[]; this.balls=[]; this.mines=[]; this.turrets=[]; this.decoys=[];
+    this.players=new Map(); this.bots=[]; this.balls=[]; this.mines=[]; this.turrets=[]; this.decoys=[]; this.stores=[];
     this.events=[]; this.nextId=1;
     this.roundsWon={blue:0,red:0}; this.pot=0; this.mode='tdm'; this.tournament=false; this.flags=[]; this.caps={blue:0,red:0};
     this.invWave=1; this.invSession=false; this.superNext=false; this.superRound=false; this.doubleRewards=false; this.goldenEnded=false; this._endGrace=0;
@@ -290,7 +292,7 @@ class Game {
     const f={ id:this.nextId++, bot:!!isBot, team, cls, x:s.x,y:s.y,r:14,aim:team==='blue'?0:Math.PI,
       hp:1,maxhp:1,alive:true, ammo:0,reloading:false,reloadT:0,cool:0, downed:false,downT:0, ultReady:false,ultActive:null,ultT:0,evacT:0, lsArmed:false,lsArmedT:0,lsActive:false,lsT:0,lsRevive:3,lsBy:null, kills:0,deaths:0,
       wantAnte:false, anteIn:false, zone:null, equip:this.defaultEquip(cls), mineCharges:0, decoyCharges:0, hasTurret:false,
-      goldenArmed:false, goldenCD:0, swapCD:0, roundKills:0, anteAmt:100, ready:true, activeThisRound:false, afkRounds:0, spawnedThisRound:false, golden:false, fast:false, shield:0, spdMul:1, modeVotes:{},
+      goldenArmed:false, goldenCD:0, swapCD:0, mortar:false, mortarShots:0, mortarT:0, storeId:null, storeCD:0, roundKills:0, anteAmt:100, ready:true, activeThisRound:false, afkRounds:0, spawnedThisRound:false, golden:false, fast:false, shield:0, spdMul:1, modeVotes:{},
       input:{mx:0,my:0,aim:0,fire:false,reload:false,deploy:false},
       ai:{target:null,repath:0,strafe:Math.random()<.5?1:-1,jitter:0,wander:rand(0,6.28)},
       name:isBot?BOTNAMES[(NAMEI++)%BOTNAMES.length]:'Player', key:null };
@@ -445,7 +447,8 @@ class Game {
     else if(ult==='speed'){ p.ultActive='speed'; p.ultT=10.0; this.emit({type:'ult',k:'speed',id:p.id}); }
     else if(ult==='invis'){ p.ultActive='invis'; p.ultT=10.0; this.emit({type:'ult',k:'invis',id:p.id}); }
     else if(ult==='laststand'){ const ct=this.classTierOf(p); p.lsArmed=true; p.lsArmedT=5+ct; p.lsRevive=2.5+ct*0.5; this.emit({type:'ult',k:'laststand',id:p.id}); }
-    this.emit({type:'msg',team:p.team,teamOnly:true,text:`${p.name} used ${ult==='evac'?'Emergency Evac':ult==='speed'?'Speed Boost':ult==='invis'?'Cloak':'Last Stand'}.`}); }
+    else if(ult==='mortar'){ p.mortar=true; p.mortarShots=MORTAR_SHOTS; p.mortarT=14; p.cool=0; this.emit({type:'ult',k:'mortar',id:p.id}); }
+    this.emit({type:'msg',team:p.team,teamOnly:true,text:`${p.name} used ${ult==='evac'?'Emergency Evac':ult==='speed'?'Speed Boost':ult==='invis'?'Cloak':ult==='laststand'?'Last Stand':'the Mortar'}.`}); }
   evacTeleport(f){ const minD=10*TILE; let tx=f.x,ty=f.y,tries=0;
     do{ tx=rand(80,ARENA.w-80); ty=rand(80,ARENA.h-80); tries++; } while(Math.hypot(tx-f.x,ty-f.y)<minD && tries<50);
     this.emit({type:'teleport',id:f.id,fx:Math.round(f.x),fy:Math.round(f.y),tx:Math.round(tx),ty:Math.round(ty)}); f.x=tx; f.y=ty; this.collide(f); f.evacT=0; }
@@ -458,8 +461,15 @@ class Game {
     for(const b of this.bots){ if(!b.alive||b.team===p.team) continue; const dd=dist2(p.x,p.y,b.x,b.y); if(dd<bd && this.clearPath(p.x,p.y,b.x,b.y)){ bd=dd; best=b; } }
     if(best) swing(best); }
   startReload(f){ if(!f||!f.alive||f.reloading) return; const st=this.stats(f); if((f.clip==null?st.mag:f.clip)>=st.mag) return; const unlimited=(this.mode==='invaders')||f.bot; if(!unlimited && f.ammo<=0) return; f.reloading=true; f.reloadT=st.reload||1.5; }
+  fireMortar(f){ if(f.cool>0||f.mortarShots<=0) return; f.cool=0.9; f.mortarShots--;
+    const range=(f.input&&f.input.aimDist>0)?Math.min(950,Math.max(140,f.input.aimDist)):520; const ang=f.aim;
+    this.balls.push({x:f.x+Math.cos(ang)*22,y:f.y+Math.sin(ang)*22,x0:f.x,y0:f.y,pforest:true,lob:true,vx:Math.cos(ang),vy:Math.sin(ang),speed:160,dmg:1,team:f.team,owner:f.id,life:range/160,color:'#ffcf6a',r:9,pierce:false,splash:MORTAR_SPLASH,mortar:1});
+    this.emit({type:'mortarfire',x:Math.round(f.x),y:Math.round(f.y),team:f.team});
+    if(f.mortarShots<=0) f.mortar=false; }
   fire(f){
-    if(!f.alive||f.cool>0||f.reloading) return;
+    if(!f.alive) return;
+    if(f.mortar){ this.fireMortar(f); return; }
+    if(f.cool>0||f.reloading) return;
     const st=this.stats(f);
     if(st.melee){ f.cool=st.fireRate/1000; f.firedT=this.clock; if(f.ultActive==='invis'){ f.ultActive=null; f.ultT=0; } if(!f.bot && f.key) this.bumpStat(f,'shots');   // Scout melee: a single "death square" in the facing direction (not all around)
       const tx=f.x+Math.cos(f.aim)*TILE, ty=f.y+Math.sin(f.aim)*TILE, R=TILE*0.8;
@@ -491,11 +501,28 @@ class Game {
   deploy(f){
     if(!f.alive) return; const g=f.equip.gadget;
     if(g==='mine'){ if(f.mineCharges<=0) return; f.mineCharges--; this.mines.push({id:this.nextId++,x:f.x,y:f.y,team:f.team,owner:f.id,arm:1.0,r:58}); this.emit({type:'deploy',kind:'mine',team:f.team}); }
-    else if(g==='turret'||g==='grenade_turret'||g==='rocket_turret'){ if(f.hasTurret) return; f.hasTurret=true;
-      const kind=g==='grenade_turret'?'grenade':(g==='rocket_turret'?'rocket':'base'); const hp=kind==='rocket'?16:(kind==='grenade'?13:10); const range=kind==='rocket'?520:(kind==='grenade'?470:420);
-      this.turrets.push({id:this.nextId++,x:f.x,y:f.y,team:f.team,owner:f.id,hp,maxhp:hp,cool:0,range,kind}); this.emit({type:'deploy',kind:'turret',team:f.team}); }
+    else if(g==='turret'){ if(f.hasTurret) return; f.hasTurret=true; this.spawnTurret(f,'base',f.x,f.y); this.emit({type:'deploy',kind:'turret',team:f.team}); }
+    else if(g==='store'){ if((f.storeCD||0)>0 || this.stores.some(s=>s.owner===f.id)) return; const sid=this.nextId++; this.stores.push({id:sid,x:f.x,y:f.y,team:f.team,owner:f.id,hp:6,maxhp:6,level:1}); f.storeId=sid; this.emit({type:'deploy',kind:'store',team:f.team}); }
     else if(g==='decoy'){ if(f.decoyCharges<=0) return; f.decoyCharges--; this.decoys.push({id:this.nextId++,x:f.x,y:f.y,team:f.team,cls:f.cls,life:12}); }
   }
+  spawnTurret(owner,kind,x,y){ const range=kind==='rocket'?520:(kind==='grenade'?470:420); this.turrets.push({id:this.nextId++,x,y,team:owner.team,owner:owner.id,hp:TURRET_HP,maxhp:TURRET_HP,cool:0,range,kind}); }
+  engBots(id){ let n=0; for(const b of this.bots) if(b.engOwner===id&&b.alive) n++; return n; }
+  engTurrets(id){ let n=0; for(const tr of this.turrets) if(tr.owner===id) n++; return n; }
+  engCaps(p){ const store=this.stores.find(s=>s.owner===p.id); const lvl=store?store.level:0; const ct=this.classTierOf(p); return { maxTurrets:Math.min(4,ct), maxBots:Math.min(6,lvl*2), storeLevel:lvl }; }
+  spawnEngBot(p,store){ const pool=CLASS_KEYS.filter(c=>c!=='Engineer'); const ck=pool[Math.floor(rand(0,pool.length))]; const b=this.newFighter(p.team,ck,true); b.engOwner=p.id; b.x=store.x+rand(-34,34); b.y=store.y+rand(-34,34); b.alive=true; const st=this.stats(b); b.maxhp=st.hp; b.hp=st.hp; b.ammo=st.ammoPool; b.clip=st.mag; this.bots.push(b); }
+  engbuy(id,item){ const p=this.players.get(id); if(!p||p.bot) return {ok:false,msg:'no player'};
+    if(p.cls!=='Engineer') return {ok:false,msg:'Engineers only'};
+    if(this.phase!=='active'||!p.alive) return {ok:false,money:this.getMoney(p),msg:'Only in-round, while alive'};
+    const store=this.stores.find(s=>s.owner===p.id); if(!store) return {ok:false,money:this.getMoney(p),msg:'Drop your Field Store first (G)'};
+    if(dist2(p.x,p.y,store.x,store.y) > (3.2*TILE)*(3.2*TILE)) return {ok:false,money:this.getMoney(p),msg:'Get closer to your store'};
+    const caps=this.engCaps(p);
+    if(item==='upgrade'){ const nl=store.level+1, cost=ENG_STORE_UP[nl]; if(!cost) return {ok:false,money:this.getMoney(p),msg:'Store at max level'}; if(this.getMoney(p)<cost) return {ok:false,money:this.getMoney(p),msg:'Not enough Paint Coins'}; this.addMoney(p,-cost); store.level=nl; return {ok:true,money:this.getMoney(p),msg:`Store upgraded to L${nl}`}; }
+    if(item==='bot'){ if(this.engBots(p.id)>=caps.maxBots) return {ok:false,money:this.getMoney(p),msg:`Bot cap ${caps.maxBots} reached — upgrade store`}; const cost=ENG_COST.bot; if(this.getMoney(p)<cost) return {ok:false,money:this.getMoney(p),msg:'Not enough Paint Coins'}; this.addMoney(p,-cost); this.spawnEngBot(p,store); return {ok:true,money:this.getMoney(p),msg:'Bot deployed'}; }
+    const kindMap={pellet_turret:'base',grenade_turret:'grenade',rocket_turret:'rocket'}, kind=kindMap[item];
+    if(!kind) return {ok:false,money:this.getMoney(p),msg:'Unknown item'};
+    if(this.engTurrets(p.id)>=caps.maxTurrets) return {ok:false,money:this.getMoney(p),msg:`Turret cap ${caps.maxTurrets} reached — level up class`};
+    const cost=ENG_COST[item]; if(this.getMoney(p)<cost) return {ok:false,money:this.getMoney(p),msg:'Not enough Paint Coins'};
+    this.addMoney(p,-cost); this.spawnTurret(p,kind,p.x+rand(-16,16),p.y+rand(-16,16)); return {ok:true,money:this.getMoney(p),msg:`${item.replace('_',' ')} placed`}; }
   swapWeapon(id){ const p=this.players.get(id); if(!p||!p.alive) return; const w2=p.equip.weapon2;
     if(!w2 || w2==='none' || (p.swapCD||0)>0) return;
     const w1=p.equip.weapon, m1=(p.equip.wmods||[]).slice();
@@ -514,7 +541,7 @@ class Game {
       this.emit({type:'laststand',id:target.id,byId:attacker?attacker.id:0,x:Math.round(target.x),y:Math.round(target.y),team:target.team}); return; }
     this.killNow(target,attacker); }
   killNow(target,attacker){
-    if(!target.alive) return; target.lsActive=false; target.lsArmed=false;
+    if(!target.alive) return; target.lsActive=false; target.lsArmed=false; target.mortar=false;
     target.alive=false; target.deaths++;
     if(this.mode==='ctf'){ for(const fl of this.flags) if(fl.carrier===target.id){ fl.carrier=null; fl.atHome=false; fl.dropT=20; fl.x=target.x; fl.y=target.y; } }
     this.emit({type:'splat',x:target.x,y:target.y,c:target.golden?'#ffd700':(attacker?CLASSES[attacker.cls].color:'#fff')});
@@ -528,7 +555,6 @@ class Game {
     this.emit({type:'splash',x:Math.round(x),y:Math.round(y),r:Math.round(radius),c:color||(attacker?CLASSES[attacker.cls].color:'#ffd166')});
     for(const f of [...this.players.values(),...this.bots]){ if(!f.alive||f.team===team) continue;
       if(dist2(x,y,f.x,f.y)<=radius*radius) this.applyDamage(f, 1, attacker, true); }   // explosions ignore armor
-    for(const tr of this.turrets){ if(tr.team===team) continue; if(dist2(x,y,tr.x,tr.y)<=radius*radius) tr.hp-=5; }
   }
   gainXp(p,n){ if(p.bot||!p.key) return; const before=levelInfo(this.getXp(p)).level; this.xp[p.key]=(this.xp[p.key]??0)+n;
     const after=levelInfo(this.getXp(p)).level;
@@ -573,7 +599,7 @@ class Game {
 
   // ---- rounds ----
   startRound(){
-    this.roundNum++; this.phase='active'; this.roundTimer=ROUND_TIME; this.balls=[]; this.mines=[]; this.turrets=[]; this.decoys=[]; this.flags=[]; this.caps={blue:0,red:0};
+    this.roundNum++; this.phase='active'; this.roundTimer=ROUND_TIME; this.balls=[]; this.mines=[]; this.turrets=[]; this.decoys=[]; this.stores=[]; this.flags=[]; this.caps={blue:0,red:0};
     const newSeries = !this.tournament && this.allAnted();         // tournament begins when everyone has anted
     if(newSeries){ this.tournament=true; this.roundsWon={blue:0,red:0}; }
     this.superRound = this.superNext; this.superNext=false;        // Golden-bot kill launches a one-off Super Invaders
@@ -598,7 +624,7 @@ class Game {
       const st=this.stats(f);
       if(this.mode==='invaders' && !f.bot){ f.x=ARENA.w/2+rand(-70,70); f.y=ARENA.h/2+rand(-70,70); }      // Bot Invaders: team starts centered
       else if(!(this.mode==='invaders'&&f.bot)){ const s=this.teamSpawn(f.team); f.x=s.x; f.y=s.y; }   // edge-bots keep their edge spot
-      f.aim=f.team==='blue'?0:Math.PI; f.maxhp=st.hp; f.hp=st.hp; f.alive=(f.bot?true:p_ready(f)); f.ammo=(this.mode==='invaders'?99999:st.ammoPool); f.clip=st.mag; f.reloading=false; f.reloadT=0; f.downed=false; f.downT=0; f.ultReady=!f.bot; f.ultActive=null; f.ultT=0; f.evacT=0; f.lsArmed=false; f.lsArmedT=0; f.lsActive=false; f.lsT=0; f.lsBy=null; f.lsRevive=3; f.cool=0; f.goldenArmed=false; f.goldenCD=0; f.roundKills=0; f.activeThisRound=false; f.spawnedThisRound=(f.bot?false:p_ready(f));
+      f.aim=f.team==='blue'?0:Math.PI; f.maxhp=st.hp; f.hp=st.hp; f.alive=(f.bot?true:p_ready(f)); f.ammo=(this.mode==='invaders'?99999:st.ammoPool); f.clip=st.mag; f.reloading=false; f.reloadT=0; f.downed=false; f.downT=0; f.ultReady=!f.bot; f.ultActive=null; f.ultT=0; f.evacT=0; f.lsArmed=false; f.lsArmedT=0; f.lsActive=false; f.lsT=0; f.lsBy=null; f.lsRevive=3; f.cool=0; f.goldenArmed=false; f.goldenCD=0; f.mortar=false; f.mortarShots=0; f.mortarT=0; f.storeId=null; f.storeCD=0; f.roundKills=0; f.activeThisRound=false; f.spawnedThisRound=(f.bot?false:p_ready(f));
       f.mineCharges=(GADGETS[f.equip.gadget]&&GADGETS[f.equip.gadget].charges)||0;
       f.decoyCharges=f.equip.gadget==='decoy'?(GADGETS.decoy.charges):0;
       f.hasTurret=false;
@@ -734,17 +760,17 @@ class Game {
     this.roundTimer-=dt;
     for(const p of this.players.values()){ if(!p.alive) continue; const st=this.stats(p);
       const m=Math.hypot(p.input.mx,p.input.my)||1;
-      if(p.input.mx||p.input.my){ const mult=st.jetpack?1:SPEED_MULT[this.terrainCode(p.x,p.y)]; const sp=st.speed*mult; p.x+=p.input.mx/m*sp*dt; p.y+=p.input.my/m*sp*dt; }
+      if((p.input.mx||p.input.my) && !p.mortar){ const mult=st.jetpack?1:SPEED_MULT[this.terrainCode(p.x,p.y)]; const sp=st.speed*mult; p.x+=p.input.mx/m*sp*dt; p.y+=p.input.my/m*sp*dt; }
       p.aim=p.input.aim; this.collide(p); if(p.input.reload) this.startReload(p); if(p.input.fire) this.fire(p); if(st.melee) this.autoMelee(p,st); }
     for(const b of this.bots){ if(b.alive) this.updateAI(b,dt); }
     const all=[...this.players.values(),...this.bots];
-    for(const f of all){ if(f.cool>0) f.cool-=dt; if(f.goldenCD>0) f.goldenCD-=dt; if(f.swapCD>0) f.swapCD-=dt;
+    for(const f of all){ if(f.cool>0) f.cool-=dt; if(f.goldenCD>0) f.goldenCD-=dt; if(f.swapCD>0) f.swapCD-=dt; if(f.storeCD>0) f.storeCD-=dt; if(f.mortar){ f.mortarT-=dt; if(f.mortarT<=0){ f.mortar=false; f.mortarShots=0; } }
       if(f.reloading){ f.reloadT-=dt; if(f.reloadT<=0){ f.reloading=false; const rs=this.stats(f); const unl=(this.mode==='invaders')||f.bot; f.clip=unl?rs.mag:Math.min(rs.mag,Math.max(0,f.ammo)); } }
       if(f.evacT>0){ f.evacT-=dt; if(f.evacT<=0) this.evacTeleport(f); }
       if(f.ultActive){ f.ultT-=dt; if(f.ultT<=0) f.ultActive=null; }
       if(f.lsArmed){ f.lsArmedT-=dt; if(f.lsArmedT<=0) f.lsArmed=false; }
       if(f.lsActive){ f.lsT-=dt; if(f.lsT<=0){ const at=f.lsBy; f.lsBy=null; this.killNow(f,at); } } }
-    this.updateBalls(dt); if(this.balls.length>600) this.balls.splice(0,this.balls.length-600); this.updateMines(dt); this.updateTurrets(dt); if(this.mode==='ctf') this.updateFlags(dt);
+    this.updateBalls(dt); if(this.balls.length>600) this.balls.splice(0,this.balls.length-600); this.updateMines(dt); this.updateTurrets(dt); this.updateStores(dt); if(this.mode==='ctf') this.updateFlags(dt);
     for(let i=this.decoys.length-1;i>=0;i--){ this.decoys[i].life-=dt; if(this.decoys[i].life<=0) this.decoys.splice(i,1); }
     const ba=this.aliveCount('blue'), ra=this.aliveCount('red');
     if(this.goldenEnded){ this.goldenEnded=false; this.endRound('tie'); return; }   // Golden bot down -> jump to Super Invaders
@@ -779,7 +805,8 @@ class Game {
         if(tc===MOUNT||tc===HILL||(tc===FOREST&&!b.pforest)){ dead=true; this.emit({type:'splat',x:nx,y:ny,c:b.color}); } }
       if(!dead) for(const f of fighters){ if(!f.alive||f.id===b.owner||f.team===b.team) continue;
         if(dist2(nx,ny,f.x,f.y)<(f.r+b.r)*(f.r+b.r)){ this.applyDamage(f,b.dmg,this.findById(b.owner),b.pierce); dead=true; hitX=f.x; hitY=f.y; break; } }
-      if(!dead) for(const tr of this.turrets){ if(tr.team===b.team) continue; if(dist2(nx,ny,tr.x,tr.y)<(16+b.r)*(16+b.r)){ tr.hp-=b.dmg; dead=true; hitX=nx; hitY=ny; this.emit({type:'splat',x:nx,y:ny,c:b.color}); break; } }
+      if(!dead) for(const tr of this.turrets){ if(tr.team===b.team) continue; if(dist2(nx,ny,tr.x,tr.y)<(16+b.r)*(16+b.r)){ tr.hp-=1; dead=true; hitX=nx; hitY=ny; this.emit({type:'splat',x:nx,y:ny,c:b.color}); break; } }
+      if(!dead) for(const s of this.stores){ if(s.team===b.team) continue; if(dist2(nx,ny,s.x,s.y)<(20+b.r)*(20+b.r)){ s.hp-=1; dead=true; hitX=nx; hitY=ny; this.emit({type:'splat',x:nx,y:ny,c:b.color}); break; } }
       if(!dead && !b.lob) for(let mi=this.mines.length-1;mi>=0;mi--){ const mn=this.mines[mi]; if(mn.team===b.team) continue; if(dist2(nx,ny,mn.x,mn.y)<(12+b.r)*(12+b.r)){ this.mines.splice(mi,1); dead=true; hitX=nx; hitY=ny; this.emit({type:'splat',x:nx,y:ny,c:b.color}); break; } }
       if(dead){ if(b.splash) this.splashDamage(hitX,hitY,b.splash,b.team,this.findById(b.owner),b.color); this.balls.splice(i,1); continue; }
       b.x=nx; b.y=ny;
@@ -797,12 +824,14 @@ class Game {
       let best=null,bd=tr.range*tr.range;
       for(const f of [...this.players.values(),...this.bots]){ if(!f.alive||f.team===tr.team) continue;
         const d=dist2(tr.x,tr.y,f.x,f.y); if(d<bd && this.canSee(tr,f)){ bd=d; best=f; } }
-      if(best && tr.cool<=0){ const ang=Math.atan2(best.y-tr.y,best.x-tr.x)+(Math.random()-0.5)*0.05; const sx=tr.x+Math.cos(ang)*18, sy=tr.y+Math.sin(ang)*18;
-        if(tr.kind==='grenade'){ tr.cool=1.3; this.balls.push({x:sx,y:sy,x0:tr.x,y0:tr.y,vx:Math.cos(ang),vy:Math.sin(ang),speed:130,dmg:2,team:tr.team,owner:tr.owner,life:tr.range/130,color:'#caa44a',r:6,pierce:false,splash:48,lob:true}); }
-        else if(tr.kind==='rocket'){ tr.cool=1.8; this.balls.push({x:sx,y:sy,x0:tr.x,y0:tr.y,vx:Math.cos(ang),vy:Math.sin(ang),speed:220,dmg:2,team:tr.team,owner:tr.owner,life:tr.range/220,color:'#ff7b00',r:7,pierce:false,splash:140}); }
-        else { tr.cool=0.25; this.balls.push({x:sx,y:sy,x0:tr.x,y0:tr.y,vx:Math.cos(ang),vy:Math.sin(ang),speed:760,dmg:12,team:tr.team,owner:tr.owner,life:tr.range/760,color:tr.team==='blue'?'#3da9fc':'#ff5470',r:5,pierce:false,splash:0}); } }
+      if(best && tr.cool<=0){ const spread=tr.kind==='rocket'?0.12:(tr.kind==='grenade'?0.16:0.20);   // imperfect aim: keep moving and you can dodge turret fire
+        const ang=Math.atan2(best.y-tr.y,best.x-tr.x)+(Math.random()-0.5)*spread*2; const sx=tr.x+Math.cos(ang)*18, sy=tr.y+Math.sin(ang)*18;
+        if(tr.kind==='grenade'){ tr.cool=1.5; this.balls.push({x:sx,y:sy,x0:tr.x,y0:tr.y,vx:Math.cos(ang),vy:Math.sin(ang),speed:130,dmg:1,team:tr.team,owner:tr.owner,life:tr.range/130,color:'#caa44a',r:6,pierce:false,splash:48,lob:true}); }
+        else if(tr.kind==='rocket'){ tr.cool=2.4; this.balls.push({x:sx,y:sy,x0:tr.x,y0:tr.y,vx:Math.cos(ang),vy:Math.sin(ang),speed:220,dmg:1,team:tr.team,owner:tr.owner,life:tr.range/220,color:'#ff7b00',r:7,pierce:false,splash:130}); }
+        else { tr.cool=0.30; this.balls.push({x:sx,y:sy,x0:tr.x,y0:tr.y,vx:Math.cos(ang),vy:Math.sin(ang),speed:760,dmg:1,team:tr.team,owner:tr.owner,life:tr.range/760,color:tr.team==='blue'?'#3da9fc':'#ff5470',r:5,pierce:false,splash:0}); } }
     }
   }
+  updateStores(dt){ for(let i=this.stores.length-1;i>=0;i--){ const s=this.stores[i]; if(s.hp<=0){ this.emit({type:'boom',x:s.x,y:s.y}); const ow=this.findById(s.owner); if(ow){ ow.storeId=null; ow.storeCD=8; } this.stores.splice(i,1); } } }
   // turrets need an equip.vision lookup in canSee; give them a stub
   findById(id){ return this.players.get(id)||this.bots.find(b=>b.id===id)||null; }
 
@@ -831,6 +860,7 @@ class Game {
       const invisFar = me && !friendly && f.ultActive==='invis' && dist2(me.x,me.y,f.x,f.y)>(5*TILE)*(5*TILE);
       if(!invisFar && (friendly || f.bot || vis || recent || sat)) radar.push({x:Math.round(f.x),y:Math.round(f.y),tm:f.team,me:(me&&f.id===me.id)?1:0}); }
     const turrets=this.turrets.map(t=>({id:t.id,x:Math.round(t.x),y:Math.round(t.y),tm:t.team,hp:t.hp,mh:t.maxhp,k:t.kind||'base'}));
+    const stores=this.stores.map(s=>({id:s.id,x:Math.round(s.x),y:Math.round(s.y),tm:s.team,hp:s.hp,mh:s.maxhp,lvl:s.level,mine:(me&&s.owner===me.id)?1:0}));
     const decoys=this.decoys.map(d=>({id:d.id,x:Math.round(d.x),y:Math.round(d.y),tm:d.team,cls:d.cls}));
     let mines=[]; if(me){ const REV=(3.2*TILE)*(3.2*TILE); for(const m of this.mines){ if(m.team===me.team) mines.push({x:Math.round(m.x),y:Math.round(m.y),mine:1,armed:m.arm<=0?1:0}); else if(dist2(m.x,m.y,me.x,me.y)<=REV) mines.push({x:Math.round(m.x),y:Math.round(m.y),foe:1}); } }
     let you=null;
@@ -839,10 +869,10 @@ class Game {
         ammo:(this.mode==='invaders'?-1:me.ammo),mag:st.ammoPool,clip:(me.clip==null?st.mag:me.clip),clipMax:st.mag,melee:!!st.melee,reloading:!!me.reloading,reloadFrac:(me.reloading&&st.reload>0?Math.max(0,Math.min(1,1-me.reloadT/st.reload)):1),kills:me.kills,deaths:me.deaths,money:this.getMoney(me),
         x:Math.round(me.x),y:Math.round(me.y),terrain:this.terrainCode(me.x,me.y),wantAnte:me.wantAnte,anteIn:me.anteIn,
         level:li.level, xpInto:li.into, xpNeed:li.need, unlockLevel:CLASS_UNLOCK_LEVEL, classUnlocked:li.level>=CLASS_UNLOCK_LEVEL,
-        deflect:st.deflect, zone:me.zone||null, equip:me.equip, owned:this.ownedSet(me.key), inv:this.inv[me.key]||{}, fastAmmo:((this.ammoStock[me.key]||{}).fast||0), ammoSel:(me.equip.ammo||'none'), mineCharges:me.mineCharges, hasTurret:me.hasTurret, gadget:me.equip.gadget, weight:(st.weight + (me.equip.weapon2&&me.equip.weapon2!=='none'?(WEAPON_WT+modW(me.equip.wmods2)):0)), weightCap:weightCapacity(li.level), golden:st.golden, goldenReady:(me.goldenCD||0)<=0, goldenArmed:!!me.goldenArmed, anteAmt:me.anteAmt||100, wantAnte:me.wantAnte, ready:me.ready!==false, modeVotes:me.modeVotes||{}, tiers:this.tiers[me.key]||{}, classTiers:this.classTiers[me.key]||{}, classTier:this.classTierOf(me), ult:(CLASSES[me.cls]&&CLASSES[me.cls].ult)||null, ultReady:!!me.ultReady, ultActive:me.ultActive||null, ultT:Math.max(0,me.ultT||0), evacT:Math.max(0,me.evacT||0), lsArmed:!!me.lsArmed, lsArmedT:Math.max(0,me.lsArmedT||0), lsActive:!!me.lsActive, lsT:Math.max(0,me.lsT||0), spd:Math.round(st.speed*(me.equip.gadget==='jetpack'?1:(SPEED_MULT[this.terrainCode(me.x,me.y)]||1))) }; }
+        deflect:st.deflect, zone:me.zone||null, equip:me.equip, owned:this.ownedSet(me.key), inv:this.inv[me.key]||{}, fastAmmo:((this.ammoStock[me.key]||{}).fast||0), ammoSel:(me.equip.ammo||'none'), mineCharges:me.mineCharges, hasTurret:me.hasTurret, gadget:me.equip.gadget, weight:(st.weight + (me.equip.weapon2&&me.equip.weapon2!=='none'?(WEAPON_WT+modW(me.equip.wmods2)):0)), weightCap:weightCapacity(li.level), golden:st.golden, goldenReady:(me.goldenCD||0)<=0, goldenArmed:!!me.goldenArmed, anteAmt:me.anteAmt||100, wantAnte:me.wantAnte, ready:me.ready!==false, modeVotes:me.modeVotes||{}, tiers:this.tiers[me.key]||{}, classTiers:this.classTiers[me.key]||{}, classTier:this.classTierOf(me), ult:(CLASSES[me.cls]&&CLASSES[me.cls].ult)||null, ultReady:!!me.ultReady, ultActive:me.ultActive||null, ultT:Math.max(0,me.ultT||0), evacT:Math.max(0,me.evacT||0), lsArmed:!!me.lsArmed, lsArmedT:Math.max(0,me.lsArmedT||0), lsActive:!!me.lsActive, lsT:Math.max(0,me.lsT||0), mortar:!!me.mortar, mortarShots:me.mortarShots||0, eng:(me.cls==='Engineer'?(()=>{ const caps=this.engCaps(me); const store=this.stores.find(s=>s.owner===me.id); const near=store?(dist2(me.x,me.y,store.x,store.y)<=(3.2*TILE)*(3.2*TILE)):false; return { hasStore:!!store, storeLevel:caps.storeLevel, near, turrets:this.engTurrets(me.id), maxTurrets:caps.maxTurrets, bots:this.engBots(me.id), maxBots:caps.maxBots, costs:ENG_COST, upCost:(ENG_STORE_UP[(caps.storeLevel||0)+1]||0), storeCD:Math.max(0,Math.round(me.storeCD||0)) }; })():null), spd:Math.round(st.speed*(me.equip.gadget==='jetpack'?1:(SPEED_MULT[this.terrainCode(me.x,me.y)]||1))) }; }
     let stage=null; if(lobby){ stage=this.stageRect(); stage.zones=this.stageZones(stage); stage.record=this.waveRecord; }
     return { t:'state', you, fighters:out, radar, balls:this.balls.filter(b=>{ if(!me) return true; const R=(WEAPONS[me.equip.weapon]&&WEAPONS[me.equip.weapon].scope)?2800:1600; return ((b.x-me.x)*(b.x-me.x)+(b.y-me.y)*(b.y-me.y))<R*R; }).map(b=>({x:Math.round(b.x),y:Math.round(b.y),c:b.color})),
-      turrets, mines, decoys, space:'arena', stage, phase:this.phase, phaseTimer:Math.max(0,Math.round(this.phaseTimer)),
+      turrets, mines, decoys, stores, space:'arena', stage, phase:this.phase, phaseTimer:Math.max(0,Math.round(this.phaseTimer)),
       roundTime:Math.max(0,Math.round(this.roundTimer)), round:this.roundNum, roundsWon:this.roundsWon,
       alive:{blue:this.aliveCount('blue'),red:this.aliveCount('red')}, pot:this.pot, buyIn:BUY_IN, anteState:(()=>{ const ps=[...this.players.values()]; const inP=ps.filter(p=>p.wantAnte); const amounts=[...new Set(inP.map(p=>p.anteAmt))].sort((a,b)=>a-b); return { total:ps.length, in:inP.length, amounts, ready:this.allAnted() }; })(),
       mode:this.mode, modeName:this.modeName(), tournament:this.tournament, caps:{...this.caps}, captureTarget:CAPTURE_TARGET, tourneyWins:TOURNEY_WINS, wave:this.invSession?this.invWave:0, superRound:this.superRound,

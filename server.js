@@ -197,6 +197,12 @@ class Conn {
         this.send({ t:'loadresult', ...r, money: game.getMoney(game.players.get(this.playerId)) });
         break;
       }
+      case 'engbuy': {
+        if (this.playerId == null) return;
+        const r = game.engbuy(this.playerId, msg.item);
+        this.send({ t:'engresult', ...r });
+        break;
+      }
       case 'resetloadout': {
         if (this.playerId == null) return;
         const r = game.resetLoadout(this.playerId);
