@@ -203,6 +203,7 @@ class Conn {
         this.send({ t:'engresult', ...r });
         break;
       }
+      case 'turrettype': if (this.playerId != null) game.setTurretType(this.playerId, msg.kind); break;
       case 'upgradestore': {
         if (this.playerId == null) return;
         const r = game.upgradeStore(this.playerId);

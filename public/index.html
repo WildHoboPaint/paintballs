@@ -163,8 +163,8 @@
     <button id="btnUltT" class="touchbtn" title="Ultimate">⚡</button>
     <button id="btnSwapT" class="touchbtn" title="Swap weapon">⇄</button>
   <div id="fieldstore" class="hidden"><div class="fshd" id="fsHead">Field Store</div><div class="fsrow">
-    <button class="fsb" data-it="bot"></button>
-  </div><div class="fsnote" id="fsNote">build turrets with G · upgrade store in loadout</div></div>
+    <button class="fsb" data-tt="base"></button><button class="fsb" data-tt="grenade"></button><button class="fsb" data-tt="rocket"></button><button class="fsb" data-it="bot"></button>
+  </div><div class="fsnote" id="fsNote">pick a turret, then press G to build it (1 at a time)</div></div>
     <div id="chat"><div id="chatlog"></div><input id="chatInput" maxlength="160" placeholder="Press Enter to chat" autocomplete="off"></div>
     <div id="lowerleft">
       <div id="hpwrap">
@@ -265,7 +265,7 @@ if(IS_TOUCH) document.addEventListener('DOMContentLoaded',()=>document.body.clas
 let shopOpenedBy=null, activeTab='class', myLoadout=null, loadCfg=null, classUnlock=null, modSlot=0, lbData=null, lbClass='overall';
 let lastBuy=null, pendingClass=null;
 let lobby=null, lobbyCanvas=null, freeCam={x:0,y:0}, storeCats=null;
-let actx=null, muted=false, prevAmmo=null, prevClip=null, prevDowned=false, bannerT=null; let peek=false; let myPos=null, srvPos=null; let chat=[]; let shake=0, hitMarkerT=0, myAim=0; const muzzles=[]; const CLIENT_BUILD='hvpb-2026.06.14.51';
+let actx=null, muted=false, prevAmmo=null, prevClip=null, prevDowned=false, bannerT=null; let peek=false; let myPos=null, srvPos=null; let chat=[]; let shake=0, hitMarkerT=0, myAim=0; const muzzles=[]; const CLIENT_BUILD='hvpb-2026.06.14.52';
 function aud(){ if(!actx){ try{ actx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } return actx; }
 function blip(type,freq,dur,vol,ramp){ if(muted) return; const a=aud(); if(!a) return; try{ const o=a.createOscillator(),g=a.createGain(); o.type=type; o.frequency.value=freq; if(ramp) o.frequency.exponentialRampToValueAtTime(Math.max(30,freq+ramp),a.currentTime+dur); g.gain.value=vol; g.gain.exponentialRampToValueAtTime(0.0001,a.currentTime+dur); o.connect(g); g.connect(a.destination); o.start(); o.stop(a.currentTime+dur); }catch(e){} }
 const sfx={
@@ -520,13 +520,12 @@ function draw(){
   if(snap.mines) for(const m of snap.mines){ if(m.foe){ const p=(0.5+0.5*Math.abs(Math.sin(performance.now()/180))); ctx.fillStyle='rgba(255,70,70,'+p.toFixed(2)+')'; ctx.beginPath(); ctx.arc(m.x,m.y,7,0,7); ctx.fill(); ctx.fillStyle='#fff'; ctx.font='bold 11px system-ui'; ctx.textAlign='center'; ctx.fillText('!',m.x,m.y+4); ctx.textAlign='left'; }
     else { ctx.fillStyle='#ffd166'; ctx.beginPath(); ctx.moveTo(m.x,m.y-6); ctx.lineTo(m.x+6,m.y+5); ctx.lineTo(m.x-6,m.y+5); ctx.closePath(); ctx.fill(); ctx.strokeStyle='#7a5b00'; ctx.lineWidth=1.5; ctx.stroke(); } }
   // turrets
-  if(snap.turrets) for(const t of snap.turrets){ const col=t.tm==='blue'?'#3da9fc':'#ff5470'; const TS=46;
+  if(snap.turrets) for(const t of snap.turrets){ const team=t.tm==='blue'?'#3da9fc':'#ff5470'; const TS=46;
+    const kc=t.k==='rocket'?'#ff7b00':(t.k==='grenade'?'#caa44a':team);   // overlay colour = the ammo it fires
     ctx.fillStyle='rgba(0,0,0,.30)'; ctx.beginPath(); ctx.ellipse(t.x,t.y+TS*0.40,TS*0.42,TS*0.20,0,0,7); ctx.fill();
-    ctx.strokeStyle=col; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(t.x,t.y+TS*0.32,TS*0.30,0,7); ctx.stroke();
-    if(turretImg){ ctx.save(); ctx.translate(t.x,t.y); if(t.tm==='red') ctx.scale(-1,1); ctx.drawImage(turretImg,-TS/2,-TS/2,TS,TS); ctx.restore(); }
-    else { ctx.fillStyle='#1a232e'; ctx.fillRect(t.x-11,t.y-11,22,22); ctx.fillStyle=col; ctx.fillRect(t.x-8,t.y-8,16,16); }
-    const w=28,hw=clamp(t.hp/t.mh,0,1)*w; ctx.fillStyle='rgba(0,0,0,.5)'; ctx.fillRect(t.x-w/2,t.y-TS*0.62,w,3); ctx.fillStyle=col; ctx.fillRect(t.x-w/2,t.y-TS*0.62,hw,3);
-    if(t.k&&t.k!=='base'){ const kc=t.k==='rocket'?'#ff7b00':'#caa44a'; ctx.strokeStyle=kc; ctx.lineWidth=2.5; ctx.beginPath(); ctx.arc(t.x,t.y,TS*0.42,0,7); ctx.stroke(); ctx.fillStyle=kc; ctx.font='bold 11px system-ui'; ctx.textAlign='center'; ctx.fillText(t.k==='rocket'?'R':'G',t.x,t.y-TS*0.5); ctx.textAlign='left'; } }
+    if(turretImg){ ctx.save(); ctx.translate(t.x,t.y); if(t.tm==='red') ctx.scale(-1,1); ctx.drawImage(turretImg,-TS/2,-TS/2,TS,TS); const tw=tintedSprite(turretImg,kc); if(tw){ ctx.globalAlpha=0.6; ctx.drawImage(tw,-TS/2,-TS/2,TS,TS); ctx.globalAlpha=1; } ctx.restore(); }
+    else { ctx.fillStyle='#1a232e'; ctx.fillRect(t.x-11,t.y-11,22,22); ctx.fillStyle=kc; ctx.fillRect(t.x-8,t.y-8,16,16); }
+    const w=28,hw=clamp(t.hp/t.mh,0,1)*w; ctx.fillStyle='rgba(0,0,0,.5)'; ctx.fillRect(t.x-w/2,t.y-TS*0.62,w,3); ctx.fillStyle=kc; ctx.fillRect(t.x-w/2,t.y-TS*0.62,hw,3); }
   // decoys (faded)
   if(snap.decoys) for(const d of snap.decoys){ ctx.globalAlpha=0.55; const dspr=sprites[d.cls]; if(dspr){ ctx.drawImage(dspr,d.x-16,d.y-16,32,32); } else { drawBody({x:d.x,y:d.y,a:0,ref:{tm:d.tm,cls:d.cls,hp:1,mh:1,id:-1,n:'?'}}); } ctx.globalAlpha=1; }
   if(snap.stores) for(const s of snap.stores){ const col=s.tm==='blue'?'#3da9fc':'#ff5470';
@@ -627,7 +626,6 @@ function drawFighter(v){
     else if(f.fast){ glow='#ff8c28'; gblur=10; }
     if(f.dn){ tint='#ff3030'; tintA=0.5*puls(110); glow='#ff4040'; gblur=11; }
     if(f.ls){ tint='#ff2020'; tintA=0.45+0.35*puls(70); glow='#ff3030'; gblur=10+8*puls(70); }   // Last Stand: the model itself flashes red
-    if(f.cam){ alpha=me?0.5:0.32; }                          // camo: the model goes ghostly/translucent (no ring)
     if(f.ult==='invis'){ alpha=me?0.4:0.28; }
     ctx.save(); ctx.translate(v.x,v.y);
     if(Math.cos(v.a)<0) ctx.scale(-1,1);            // face left when aiming left, else right
@@ -686,7 +684,7 @@ function hud(){
     $('hpNum').textContent=dz+'%'; $('clsName').textContent=y.cls;
     { const rl=y.reloading, clip=(y.clip==null?(y.clipMax||0):y.clip), cm=y.clipMax||0, pool=(y.ammo<0?'∞':y.ammo);
       $('ammo').innerHTML=(y.melee?`<span style="color:#9b5de5">⚔ MELEE</span>`:`AMMO ${rl?'<span style="color:#ffb84d">⟳ RELOADING</span>':(clip+' / '+cm)} <span style="opacity:.55">· pool ${pool}</span>`)+(y.ammoSel==='fast'?` · <span style="color:#ff6b6b">⚡Fast ${y.fastAmmo||0}</span>`:'')+(y.golden?` · <span style="color:#ffd700">${y.goldenArmed?'★ARMED':(y.goldenReady?'GOLD [F]':'gold…')}</span>`:''); }
-    let gl=''; if(y.gadget==='mine') gl=`Mines: ${y.mineCharges} <span style="color:#8aa0b3">[G]</span>`; else if(y.gadget==='turret'||y.gadget==='grenade_turret'||y.gadget==='rocket_turret'){ if(y.eng){ const tn=({turret:'Pellet',grenade_turret:'Grenade',rocket_turret:'Rocket'})[y.gadget]; const cost=(y.eng.costs&&y.eng.costs[y.gadget==='turret'?'pellet_turret':y.gadget])||0; gl=`${tn} turret ${y.eng.turrets}/${y.eng.maxTurrets} <span style="color:#8aa0b3">[G] 💰${cost}</span>`; } else gl=y.hasTurret?'Turret: deployed':'Turret ready <span style="color:#8aa0b3">[G]</span>'; } else if(y.gadget==='jetpack') gl='Jetpack active'; else if(y.gadget==='decoy') gl=`Decoys: ${y.mineCharges||0} <span style="color:#8aa0b3">[G]</span>`; else gl='No gadget';
+    let gl=''; if(y.gadget==='mine') gl=`Mines: ${y.mineCharges} <span style="color:#8aa0b3">[G]</span>`; else if(y.gadget==='turret'){ if(y.eng){ const tt=y.eng.turretType||'base'; const tn=({base:'Pellet',grenade:'Grenade',rocket:'Rocket'})[tt]; const cm={base:'pellet_turret',grenade:'grenade_turret',rocket:'rocket_turret'}; const cost=(y.eng.costs&&y.eng.costs[cm[tt]])||0; gl=`${tn} turret ${y.eng.turrets}/1 <span style="color:#8aa0b3">[G] 💰${cost}</span>`; } else gl=y.hasTurret?'Turret: deployed':'Turret ready <span style="color:#8aa0b3">[G]</span>'; } else if(y.gadget==='jetpack') gl='Jetpack active'; else if(y.gadget==='decoy') gl=`Decoys: ${y.mineCharges||0} <span style="color:#8aa0b3">[G]</span>`; else gl='No gadget';
     { const w1=(catalog&&catalog.weapon[y.equip.weapon]||{}).name||y.equip.weapon; let wpl;
         if(y.equip.weapon2 && y.equip.weapon2!=='none'){ const w2=(catalog&&catalog.weapon[y.equip.weapon2]||{}).name||y.equip.weapon2; wpl=`<b style="color:#fff">${w1}</b><span style="color:#7ad7ff"> ⇄ ${w2} [Q]</span>`; }
         else wpl=`<b style="color:#cfe9ff">${w1}</b>`;
@@ -702,7 +700,7 @@ function hud(){
       else if(y.ultReady) ut=`<span style="color:#9be36a">⚡ ${nm} READY [Space]</span>`;
       else ut=`<span style="color:#6f8499">⚡ ${nm} used</span>`; } ul.innerHTML=ut; } }
     $('lvNum').textContent='Lv '+y.level; $('xpfill').style.width=clamp(y.xpInto/y.xpNeed,0,1)*100+'%';
-    const tn=['Plains','Forest','Water','Mountain'][y.terrain]||''; $('terr').textContent='Terrain: '+tn+'  ·  one hit = out'+(y.cls!=='Trooper'?'':'  ·  Lv'+y.unlockLevel+' unlocks classes');
+    const tn=['Plains','Forest','Water','Mountain'][y.terrain]||''; $('terr').textContent='Terrain: '+tn+(y.camoActive?'  ·  🌫 hidden on minimap':'')+'  ·  one hit = out'+(y.cls!=='Trooper'?'':'  ·  Lv'+y.unlockLevel+' unlocks classes');
     updateFieldStore(y);
     $('topleft').innerHTML=`<div id="wallet">💰 ${y.money} Paint Coins</div>`+(s.pot>0?`<div id="pot">Pot: 💰 ${s.pot}${y.anteIn?' (you anted)':''}</div>`:'')+`Your splats: <b style="color:#fff">${y.kills}</b>`;
   }
@@ -728,9 +726,10 @@ function toggleLeaderboard(){ const p=$('leaderboard'); if(!p) return; if(p.clas
 function updateFieldStore(y){ const el=$('fieldstore'); if(!el) return; const e=y&&y.eng;
   const show=e&&y.alive&&snap&&snap.phase==='active';
   el.classList.toggle('hidden',!show); if(!show) return;
-  $('fsHead').textContent=`Field Store · turrets ${e.turrets}/${e.maxTurrets} · bots ${e.bots}/${e.maxBots} · 💰 ${y.money}`;
-  const c=e.costs||{}, cost=c.bot||0, capHit=(e.bots>=e.maxBots); const b=el.querySelector('[data-it="bot"]');
-  if(b){ b.disabled=capHit||y.money<cost; b.innerHTML=`🤖 Buy Bot · 💰${cost}`+(capHit?' (cap — raise Store Level)':''); } }
+  $('fsHead').textContent=`Field Store · 💰 ${y.money}`; const c=e.costs||{};
+  const tcost={base:c.pellet_turret,grenade:c.grenade_turret,rocket:c.rocket_turret}, tname={base:'• Pellet',grenade:'◎ Grenade',rocket:'▲ Rocket'};
+  ['base','grenade','rocket'].forEach(k=>{ const b=el.querySelector('[data-tt="'+k+'"]'); if(!b) return; const sel=(e.turretType||'base')===k; b.style.outline=sel?'2px solid #9be36a':''; b.style.opacity=sel?'1':'.7'; b.innerHTML=`${tname[k]}<br>💰${tcost[k]||0}`; });
+  const bb=el.querySelector('[data-it="bot"]'); if(bb){ const cd=e.botCD||0, capHit=(e.bots>=e.maxBots); bb.disabled=cd>0||capHit||y.money<(c.bot||0); bb.innerHTML = cd>0?`🤖 Bot<br>${cd}s` : (`🤖 Bot ${e.bots}/${e.maxBots}<br>💰${c.bot||0}`+(capHit?' max':'')); } }
 function lbShort(c){ return ({VetTrooper:'Vet',HeavyWeapons:'Heavy'})[c]||c; }
 function renderLeaderboard(d){ lbData=d; lbClass='overall'; renderLbTabs(); renderLbCols(); }
 function renderLbTabs(){ const tb=$('lbtabs'); if(!tb||!lbData) return; const keys=['overall'].concat(lbData.byClass?Object.keys(lbData.byClass):[]); tb.innerHTML='';
@@ -747,15 +746,15 @@ $('lbClose').onclick=()=>$('leaderboard').classList.add('hidden');
 $('resetBtn').onclick=()=>{ if(snap&&snap.you) send({t:'resetloadout'}); };
 function setPeekBtn(){ const b=$('btnPeek'); if(b) b.classList.toggle('on',peek); }
 $('btnPeek').onclick=()=>{ peek=!peek; setPeekBtn(); toast(peek?'🔍 Pan mode ON, move mouse to look around':'Pan mode off'); };
-{ const fs=$('fieldstore'); if(fs) fs.querySelectorAll('.fsb').forEach(b=>b.onclick=()=>send({t:'engbuy',item:b.dataset.it})); }
+{ const fs=$('fieldstore'); if(fs) fs.querySelectorAll('.fsb').forEach(b=>b.onclick=()=>{ if(b.dataset.tt) send({t:'turrettype',kind:b.dataset.tt}); else if(b.dataset.it) send({t:'engbuy',item:b.dataset.it}); }); }
 { const rb=$('btnReloadT'); if(rb) rb.addEventListener('pointerdown',e=>{ e.preventDefault(); reloadFlag=true; }); const gb=$('btnGadgetT'); if(gb) gb.addEventListener('pointerdown',e=>{ e.preventDefault(); deployFlag=true; }); const ub=$('btnUltT'); if(ub) ub.addEventListener('pointerdown',e=>{ e.preventDefault(); ultFlag=true; }); const sw=$('btnSwapT'); if(sw) sw.addEventListener('pointerdown',e=>{ e.preventDefault(); swapFlag=true; }); }
 $('btnReady').onclick=()=>{ if(snap&&snap.you) send({t:'ready', on:!(snap.you.ready!==false)}); };
 $('chatInput').addEventListener('keydown',e=>{ e.stopPropagation(); if(e.key==='Enter'){ const v=$('chatInput').value.trim(); if(v) send({t:'chat',text:v}); $('chatInput').value=''; $('chatInput').blur(); } else if(e.key==='Escape'){ $('chatInput').value=''; $('chatInput').blur(); } });
 $('anteBtn').onclick=()=>{ if(snap&&snap.you) send({t:'ante', on:!snap.you.wantAnte, amt:snap.you.anteAmt||100}); };
 $('anteAmt').onclick=()=>{ if(!snap||!snap.you) return; const opts=snap.anteOptions||[100,500,1000]; const cur=snap.you.anteAmt||opts[0]; const next=opts[(opts.indexOf(cur)+1)%opts.length]; send({t:'ante', on:snap.you.wantAnte, amt:next}); };
 function ldWeight(ld){ const WW=(loadCfg?loadCfg.weaponWt:4); let w=WW; for(const m of ld.wmods){ if(catalog.wmod[m]) w+=catalog.wmod[m].wt||0; } for(const c of ld.chips){ if(catalog.chip[c]) w+=catalog.chip[c].wt||0; } if(ld.weapon2 && ld.weapon2!=='none'){ w+=WW; for(const m of (ld.wmods2||[])){ if(catalog.wmod[m]) w+=catalog.wmod[m].wt||0; } } return w; }
-function syncLoadout(){ const y=snap&&snap.you; if(!y||!y.equip) return; myLoadout={weapon:y.equip.weapon, wmods:(y.equip.wmods||[]).slice(), chips:(y.equip.chips||[]).slice(), gadget:y.equip.gadget||'none', ammo:y.equip.ammo||'none', weapon2:y.equip.weapon2||null, wmods2:(y.equip.wmods2||[]).slice()}; if(!myLoadout.weapon2||myLoadout.weapon2==='none') modSlot=0; }
-function sendLoadout(){ if(myLoadout) send({t:'loadout', weapon:myLoadout.weapon, wmods:myLoadout.wmods, chips:myLoadout.chips, gadget:myLoadout.gadget, ammo:myLoadout.ammo, weapon2:myLoadout.weapon2||null, wmods2:myLoadout.wmods2||[]}); }
+function syncLoadout(){ const y=snap&&snap.you; if(!y||!y.equip) return; myLoadout={weapon:y.equip.weapon, wmods:(y.equip.wmods||[]).slice(), chips:(y.equip.chips||[]).slice(), gadget:y.equip.gadget||'none', ammo:y.equip.ammo||'none', weapon2:y.equip.weapon2||null, wmods2:(y.equip.wmods2||[]).slice(), camoTerrain:(y.camoTerrain==null?1:y.camoTerrain)}; if(!myLoadout.weapon2||myLoadout.weapon2==='none') modSlot=0; }
+function sendLoadout(){ if(myLoadout) send({t:'loadout', weapon:myLoadout.weapon, wmods:myLoadout.wmods, chips:myLoadout.chips, gadget:myLoadout.gadget, ammo:myLoadout.ammo, weapon2:myLoadout.weapon2||null, wmods2:myLoadout.wmods2||[], camoTerrain:(myLoadout.camoTerrain==null?1:myLoadout.camoTerrain)}); }
 function ownsIt(cat,id){ const y=snap.you; const it=catalog[cat]&&catalog[cat][id]; if(it&&it.cost===0) return true; if(cat==='weapon'&&(classesInfo[y.cls]||{}).defWeapon===id) return true; return (y.owned||[]).includes(cat+':'+id); }
 function ldSummary(y){ const el=document.createElement('div'); el.className='ldsum'; if(!myLoadout) return el;
   const wN=(catalog.weapon[myLoadout.weapon]||{}).name||myLoadout.weapon;
@@ -778,7 +777,7 @@ function buildGrid(){
   if(activeTab!=='modes') grid.appendChild(ldSummary(y));
   if(snap.phase==='active' && snap.you.alive && activeTab!=='modes'){ const w=document.createElement('div'); w.className='item lock'; w.innerHTML='<div class="in"><span>\uD83D\uDD12 Loadout locked</span></div><div class="id">Gear changes only between rounds, in the holding area. (Mode voting still works.)</div>'; grid.appendChild(w); return; }
   if(activeTab==='class'){
-    { const CTc={2:600,3:1200,4:2000,5:3000}; const perks={Sniper:'Sharper vision: fewer blind squares up close.',Scout:'Faster movement speed.',Infiltrator:'Faster movement speed (longer invisibility coming soon).',VetTrooper:'Last Stand: longer armed window + more time to take someone down before you fall (a draw if you splat the last enemy). Also softens weapon-mod downsides.',Engineer:'Build more turrets at once — turret cap rises with class tier.'};
+    { const CTc={2:600,3:1200,4:2000,5:3000}; const perks={Sniper:'Sharper vision: fewer blind squares up close.',Scout:'Faster movement speed.',Infiltrator:'Faster movement speed (longer invisibility coming soon).',VetTrooper:'Last Stand: longer armed window + more time to take someone down before you fall (a draw if you splat the last enemy). Also softens weapon-mod downsides.'};
       if(perks[y.cls]){ const ct=(y.classTiers&&y.classTiers[y.cls])||y.classTier||1;
         const el=document.createElement('div'); el.className='item eq';
         el.innerHTML=`<div class="in"><span>⭐ CLASS PERK · ${y.cls} <span style="color:#9be36a">T${ct}/5</span></span></div><div class="id">Improves your class ability (separate from the weapon). ${perks[y.cls]}</div>`;
@@ -891,6 +890,11 @@ function buildGrid(){
   const head=document.createElement('div'); head.className='item';
   head.innerHTML=`<div class="in"><span>${isMod?'Weapon Mods':'Armor Chips'}: ${list.length}/${slots} equipped</span><span class="cost" style="color:${curW>cap?'#ff6b6b':'#9be36a'}">⚖ ${curW}/${cap}</span></div><div class="id">Cost is per copy, buy one for each socket. ${list.map(x=>items[x]?items[x].name:x).join(' + ')||''}</div>`;
   grid.appendChild(head);
+  if(!isMod && (myLoadout.chips||[]).includes('camo')){ const tp=document.createElement('div'); tp.className='item eq'; const names=['Plains','Forest','Water','Mountain'];
+    tp.innerHTML='<div class="in"><span>🌫 Camo terrain</span></div><div class="id">You vanish from the enemy minimap only while standing on this terrain.</div>';
+    const trow=document.createElement('div'); trow.style.cssText='display:flex;gap:6px;margin-top:6px;flex-wrap:wrap';
+    names.forEach((nm,i)=>{ const tb=document.createElement('button'); tb.className='equip'; tb.textContent=nm; tb.style.opacity=((myLoadout.camoTerrain==null?1:myLoadout.camoTerrain)===i)?'1':'.5'; tb.onclick=()=>{ myLoadout.camoTerrain=i; sendLoadout(); buildGrid(); }; trow.appendChild(tb); });
+    tp.appendChild(trow); grid.appendChild(tp); }
   if(isMod){ const has2=myLoadout.weapon2&&myLoadout.weapon2!=='none'; const tg=document.createElement('div'); tg.style.cssText='display:flex;gap:6px;margin-bottom:8px';
     const w1n=(catalog.weapon[myLoadout.weapon]||{}).name||myLoadout.weapon;
     const b1=document.createElement('button'); b1.className='equip'; b1.textContent='① '+w1n; b1.style.opacity=modSlot===0?'1':'.45'; b1.onclick=()=>{ modSlot=0; buildGrid(); }; tg.appendChild(b1);
