@@ -272,7 +272,7 @@ if(IS_TOUCH) document.addEventListener('DOMContentLoaded',()=>document.body.clas
 let shopOpenedBy=null, activeTab='class', myLoadout=null, loadCfg=null, classUnlock=null, modSlot=0, lbData=null, lbClass='overall';
 let lastBuy=null, pendingClass=null;
 let lobby=null, lobbyCanvas=null, freeCam={x:0,y:0}, storeCats=null;
-let engMoving=false; let actx=null, muted=false, prevAmmo=null, prevClip=null, prevDowned=false, bannerT=null; let peek=false; let myPos=null, srvPos=null; let chat=[]; let shake=0, hitMarkerT=0, myAim=0; const muzzles=[]; const CLIENT_BUILD='hvpb-2026.06.14.56';
+let engMoving=false; let actx=null, muted=false, prevAmmo=null, prevClip=null, prevDowned=false, bannerT=null; let peek=false; let myPos=null, srvPos=null; let chat=[]; let shake=0, hitMarkerT=0, myAim=0; const muzzles=[]; const CLIENT_BUILD='hvpb-2026.06.14.57';
 function aud(){ if(!actx){ try{ actx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } return actx; }
 function blip(type,freq,dur,vol,ramp){ if(muted) return; const a=aud(); if(!a) return; try{ const o=a.createOscillator(),g=a.createGain(); o.type=type; o.frequency.value=freq; if(ramp) o.frequency.exponentialRampToValueAtTime(Math.max(30,freq+ramp),a.currentTime+dur); g.gain.value=vol; g.gain.exponentialRampToValueAtTime(0.0001,a.currentTime+dur); o.connect(g); g.connect(a.destination); o.start(); o.stop(a.currentTime+dur); }catch(e){} }
 const sfx={
@@ -401,7 +401,7 @@ function handleEvent(ev){
   else if(ev.type==='goldenbot'){ showBanner('★ GOLDEN BOT DOWN: SUPER INVADERS! ★','#ffd700'); sfx.level(); toast('★ '+ev.by+' splatted the GOLDEN BOT. Super Bot Invaders incoming!'); }
   else if(ev.type==='levelup'){ if(ev.id===myId){ sfx.level(); if(ev.unlocked) showBanner('CLASS UNLOCKED','#ffd166'); toast(ev.unlocked?'⭐ LEVEL 10! Class selection unlocked. Open Loadout (B)':('⬆ Level '+ev.level+'!')); } }
   else if(ev.type==='roundstart'){ splats.length=0; showBanner((ev.modeName||('ROUND '+ev.round)).toUpperCase(), ev.tournament?'#ffd166':'#9be36a'); toast('⚔ '+(ev.modeName||('Round '+ev.round))+(ev.tournament?' · TOURNAMENT':'')+' · FIGHT!'); }
-  else if(ev.type==='roundend'){ const tie=ev.winner==='tie', win=snap&&snap.you&&ev.winner===snap.you.team;
+  else if(ev.type==='roundend'){ splats.length=0; const tie=ev.winner==='tie', win=snap&&snap.you&&ev.winner===snap.you.team;
     showBanner(tie?'ROUND DRAW':(win?'ROUND WON!':'ROUND LOST'), tie?'#cdd5dd':(win?'#9be36a':'#ff6b6b'));
     if(!tie){ win?sfx.win():sfx.lose(); }
     splats.length=0;   // wipe paint marks between rounds
@@ -749,7 +749,9 @@ function updateFieldStore(y){ const el=$('fieldstore'); if(!el) return; const e=
   $('fsHead').textContent=`Field Store · 💰 ${y.money}`; const c=e.costs||{};
   const tcost={base:c.pellet_turret,grenade:c.grenade_turret,rocket:c.rocket_turret}, tname={base:'• Pellet',grenade:'◎ Grenade',rocket:'▲ Rocket'};
   ['base','grenade','rocket'].forEach(k=>{ const b=el.querySelector('[data-tt="'+k+'"]'); if(!b) return; const sel=(e.turretType||'base')===k; b.style.outline=sel?'2px solid #9be36a':''; b.style.opacity=sel?'1':'.7'; b.innerHTML=`${tname[k]}<br>💰${tcost[k]||0}`; });
-  const bb=el.querySelector('[data-it="bot"]'); if(bb){ const cd=e.botCD||0, capHit=(e.bots>=e.maxBots); bb.disabled=cd>0||capHit||engMoving||y.money<(c.bot||0); bb.innerHTML = engMoving?'🤖 Bot<br>stand still' : (cd>0?`🤖 Bot<br>${cd}s` : (`🤖 Bot ${e.bots}/${e.maxBots}<br>💰${c.bot||0}`+(capHit?' max':''))); } }
+  const bb=el.querySelector('[data-it="bot"]'); if(bb){ const capHit=(e.bots>=e.maxBots);
+    if(e.botBuilding){ bb.disabled=true; bb.innerHTML=`⏳ Building…<br>${(e.botBuildT||0).toFixed(1)}s — hold still`; }
+    else { bb.disabled=capHit||y.money<(c.bot||0); bb.innerHTML=(`🤖 Build bot ${e.bots}/${e.maxBots}<br>💰${c.bot||0}`+(capHit?' max':'')); } } }
 function lbShort(c){ return ({VetTrooper:'Vet',HeavyWeapons:'Heavy'})[c]||c; }
 function renderLeaderboard(d){ lbData=d; lbClass='overall'; renderLbTabs(); renderLbCols(); }
 function renderLbTabs(){ const tb=$('lbtabs'); if(!tb||!lbData) return; const keys=['overall'].concat(lbData.byClass?Object.keys(lbData.byClass):[]); tb.innerHTML='';
