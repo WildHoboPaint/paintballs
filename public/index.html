@@ -265,7 +265,7 @@ if(IS_TOUCH) document.addEventListener('DOMContentLoaded',()=>document.body.clas
 let shopOpenedBy=null, activeTab='class', myLoadout=null, loadCfg=null, classUnlock=null, modSlot=0, lbData=null, lbClass='overall';
 let lastBuy=null, pendingClass=null;
 let lobby=null, lobbyCanvas=null, freeCam={x:0,y:0}, storeCats=null;
-let actx=null, muted=false, prevAmmo=null, prevClip=null, prevDowned=false, bannerT=null; let peek=false; let myPos=null, srvPos=null; let chat=[]; let shake=0, hitMarkerT=0, myAim=0; const muzzles=[]; const CLIENT_BUILD='hvpb-2026.06.14.52';
+let actx=null, muted=false, prevAmmo=null, prevClip=null, prevDowned=false, bannerT=null; let peek=false; let myPos=null, srvPos=null; let chat=[]; let shake=0, hitMarkerT=0, myAim=0; const muzzles=[]; const CLIENT_BUILD='hvpb-2026.06.14.53';
 function aud(){ if(!actx){ try{ actx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } return actx; }
 function blip(type,freq,dur,vol,ramp){ if(muted) return; const a=aud(); if(!a) return; try{ const o=a.createOscillator(),g=a.createGain(); o.type=type; o.frequency.value=freq; if(ramp) o.frequency.exponentialRampToValueAtTime(Math.max(30,freq+ramp),a.currentTime+dur); g.gain.value=vol; g.gain.exponentialRampToValueAtTime(0.0001,a.currentTime+dur); o.connect(g); g.connect(a.destination); o.start(); o.stop(a.currentTime+dur); }catch(e){} }
 const sfx={
@@ -343,7 +343,10 @@ function isTyping(){ const a=document.activeElement; return !!(a && a.id==='chat
 function onMsg(m){
   if(m.t==='welcome'){ myId=m.id; arena=m.arena; obstacles=m.obstacles||[]; terrain=m.terrain; catalog=m.catalog; classesInfo=m.classes; unlockLevel=m.unlockLevel||10; lobby=m.lobby||null; loadCfg=m.loadoutCfg||null; classUnlock=m.classUnlock||classUnlock;
     connected=true; $('menu').classList.add('hidden'); $('hud').classList.remove('hidden'); mm.width=180; mm.height=Math.round(180*arena.h/arena.w); prerenderTerrain(); loadSprites(); loadTiles();
-    { const vd=$('ver'); if(vd){ if(m.build&&m.build!==CLIENT_BUILD){ vd.textContent='⚠ client '+CLIENT_BUILD+' ≠ server '+m.build; vd.style.color='#ffb84d'; } else { vd.textContent='build '+CLIENT_BUILD+' ✓ live'; vd.style.color='#5b8c5b'; } } } }
+    { const vd=$('ver'); if(vd){ if(m.build&&m.build!==CLIENT_BUILD){ vd.textContent='⚠ client '+CLIENT_BUILD+' ≠ server '+m.build; vd.style.color='#ffb84d';
+        let vb=$('verbanner'); if(!vb){ vb=document.createElement('div'); vb.id='verbanner'; vb.style.cssText='position:fixed;top:0;left:0;right:0;z-index:60;background:#8a1f1f;color:#fff;text-align:center;padding:9px;font:700 13px Segoe UI,sans-serif;cursor:pointer'; vb.onclick=()=>location.reload(true); document.body.appendChild(vb); }
+        vb.textContent='⚠ New version is live ('+m.build+'). Tap here (or press Ctrl+Shift+R) to update — your current view is out of date.';
+      } else { vd.textContent='build '+CLIENT_BUILD+' ✓ live'; vd.style.color='#5b8c5b'; const vb=$('verbanner'); if(vb) vb.remove(); } } } }
   else if(m.t==='map'){ arena=m.arena; terrain=m.terrain; mm.height=Math.round(180*arena.h/arena.w); prerenderTerrain(); }
   else if(m.t==='state'){ snap=m;
     if(m.you){ if(m.you.downed&&!prevDowned){ if(sfx.hurt)sfx.hurt(); showBanner('SPLATTED! RETURN FIRE','#ff6b6b'); } prevDowned=!!m.you.downed; if(prevClip!=null && m.you.alive && m.you.clip!=null && m.you.clip<prevClip){ sfx.shoot(); if(myPos) muzzles.push({x:myPos.x,y:myPos.y,a:myAim,t:0.07}); } prevClip=(m.you.clip==null?prevClip:m.you.clip); prevAmmo=m.you.ammo;

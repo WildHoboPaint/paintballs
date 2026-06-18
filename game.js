@@ -51,7 +51,7 @@ const HEAVY_CLASSES=['VetTrooper','HeavyWeapons','Officer'];
 function weightCapacity(level){ return 10 + Math.floor(level/3)*2; }   // higher cap so two guns are viable; rewards leveling
 function modW(list){ let w=0; for(const m of (list||[])){ const d=WEAPON_MODS[m]; if(d) w+=d.wt||0; } return w; }
 const LEVELUP_BONUS=20;                 // coins per level gained
-const BUILD='hvpb-2026.06.14.52';        // bump on each change; shown in-game to verify deploys
+const BUILD='hvpb-2026.06.14.53';        // bump on each change; shown in-game to verify deploys
 
 // progression
 const CLASS_UNLOCK_LEVEL=10, LVL_BASE=2, LVL_STEP=1;
