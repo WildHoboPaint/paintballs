@@ -61,6 +61,7 @@
   #btnPeek:hover{border-color:var(--accent)}
   #btnPeek.on{background:var(--accent); color:#06121f; border-color:var(--accent)}
   #btnReady{position:absolute; top:90px; right:16px; pointer-events:auto; background:rgba(8,11,16,.7); border:1px solid #2e3d4d; color:#9be36a; border-radius:8px; padding:7px 12px; font-size:13px; font-weight:700; cursor:pointer; font-family:inherit}
+  #btnWho{position:absolute; top:128px; right:16px; pointer-events:auto; background:rgba(8,11,16,.7); border:1px solid #2e3d4d; color:#dce8f2; border-radius:8px; padding:7px 12px; font-size:13px; font-weight:700; cursor:pointer; font-family:inherit}
   #btnReady:hover{border-color:var(--accent)}
   #btnReady.out{color:#ffb84d; border-color:#7a5a1a}
   #chat{position:absolute; left:50%; transform:translateX(-50%); bottom:14px; width:440px; max-width:80vw; z-index:12; pointer-events:none; text-align:center}
@@ -71,7 +72,7 @@
   #elim{position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px}
   #elim .big{font-size:44px; font-weight:900; color:#ff5470; text-shadow:0 2px 12px #000}
   #elim .small{font-size:15px; color:#cdd}
-  #toasts{position:absolute; bottom:86px; left:50%; transform:translateX(-50%); display:flex; flex-direction:column; gap:6px; align-items:center; z-index:15}
+  #toasts{position:absolute; top:54px; left:50%; transform:translateX(-50%); display:flex; flex-direction:column; gap:6px; align-items:center; z-index:15}
   .toast{background:rgba(8,11,16,.85); border:1px solid #2e3d4d; border-radius:8px; padding:7px 16px; font-size:14px}
 
   .panel{position:absolute; inset:0; z-index:25; display:flex; align-items:center; justify-content:center; background:rgba(6,9,13,.85); backdrop-filter:blur(3px); padding:18px; overflow:auto}
@@ -128,7 +129,7 @@
   #btnGadgetT{ right:14px; bottom:160px; }
   #btnUltT{ right:14px; bottom:232px; color:#ffd166; }
   #btnSwapT{ right:14px; bottom:304px; color:#7ad7ff; display:none; }
-  #fieldstore{ position:fixed; left:50%; transform:translateX(-50%); bottom:92px; background:rgba(12,20,28,.95); border:1px solid #3a4f2a; border-radius:12px; padding:8px 12px; z-index:40; text-align:center; box-shadow:0 6px 24px rgba(0,0,0,.5); pointer-events:auto }
+  #fieldstore{ position:fixed; left:14px; bottom:150px; background:rgba(12,20,28,.95); border:1px solid #3a4f2a; border-radius:12px; padding:8px 12px; z-index:40; text-align:center; box-shadow:0 6px 24px rgba(0,0,0,.5); pointer-events:auto }
   #fieldstore .fsnote{ font-size:10px; color:#8aa0b3; margin-top:6px }
   #fieldstore.hidden{ display:none }
   #fieldstore .fshd{ font-size:12px; font-weight:800; color:#ffd166; margin-bottom:6px }
@@ -141,9 +142,9 @@
     #minimap{ width:120px; height:90px; right:10px; bottom:10px; }
     #topleft{ font-size:11px; top:8px; left:10px; line-height:1.5; }
     #scorebar{ padding:5px 12px; }
-    #btnShop,#btnPeek,#btnReady{ font-size:12px; padding:6px 9px; }
+    #btnShop,#btnPeek,#btnReady,#btnWho{ font-size:12px; padding:6px 9px; }
     #chat{ display:none; }
-    #toasts{ bottom:200px; }
+    #toasts{ top:50px; }
   }
 </style>
 </head>
@@ -158,6 +159,7 @@
     <button id="btnShop">🛒 Loadout <kbd>B</kbd></button>
     <button id="btnPeek">⤢ Look <kbd>Tab</kbd></button>
     <button id="btnReady">✓ Ready</button>
+    <button id="btnWho">👥 Players</button>
     <button id="btnReloadT" class="touchbtn" title="Reload">⟳</button>
     <button id="btnGadgetT" class="touchbtn" title="Gadget">✸</button>
     <button id="btnUltT" class="touchbtn" title="Ultimate">⚡</button>
@@ -208,6 +210,11 @@
     <div id="lbtabs" class="lbtabs" style="display:flex;gap:6px;flex-wrap:wrap;margin:4px 0 12px"></div>
     <div id="lbgrid" class="lbgrid"></div>
     <div class="row" style="margin-top:16px"><button class="btn ghost" id="lbClose">Close</button></div>
+  </div></div>
+  <div id="whopanel" class="panel hidden"><div class="box" style="max-width:560px">
+    <div class="hdrow"><div><h2>👥 Players online</h2><div class="muted" id="whoCount"></div></div></div>
+    <div id="wholist" style="margin-top:10px"></div>
+    <div class="row" style="margin-top:16px"><button class="btn ghost" id="whoClose">Close</button></div>
   </div></div>
   <div id="shop" class="panel hidden">
     <div class="box">
@@ -265,7 +272,7 @@ if(IS_TOUCH) document.addEventListener('DOMContentLoaded',()=>document.body.clas
 let shopOpenedBy=null, activeTab='class', myLoadout=null, loadCfg=null, classUnlock=null, modSlot=0, lbData=null, lbClass='overall';
 let lastBuy=null, pendingClass=null;
 let lobby=null, lobbyCanvas=null, freeCam={x:0,y:0}, storeCats=null;
-let engMoving=false; let actx=null, muted=false, prevAmmo=null, prevClip=null, prevDowned=false, bannerT=null; let peek=false; let myPos=null, srvPos=null; let chat=[]; let shake=0, hitMarkerT=0, myAim=0; const muzzles=[]; const CLIENT_BUILD='hvpb-2026.06.14.55';
+let engMoving=false; let actx=null, muted=false, prevAmmo=null, prevClip=null, prevDowned=false, bannerT=null; let peek=false; let myPos=null, srvPos=null; let chat=[]; let shake=0, hitMarkerT=0, myAim=0; const muzzles=[]; const CLIENT_BUILD='hvpb-2026.06.14.56';
 function aud(){ if(!actx){ try{ actx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } return actx; }
 function blip(type,freq,dur,vol,ramp){ if(muted) return; const a=aud(); if(!a) return; try{ const o=a.createOscillator(),g=a.createGain(); o.type=type; o.frequency.value=freq; if(ramp) o.frequency.exponentialRampToValueAtTime(Math.max(30,freq+ramp),a.currentTime+dur); g.gain.value=vol; g.gain.exponentialRampToValueAtTime(0.0001,a.currentTime+dur); o.connect(g); g.connect(a.destination); o.start(); o.stop(a.currentTime+dur); }catch(e){} }
 const sfx={
@@ -291,6 +298,7 @@ addEventListener('keydown',e=>{ if(e.target && (e.target.id==='chatInput'||e.tar
   if(k==='r') reloadFlag=true; if(k==='g') deployFlag=true; if(k===' ') ultFlag=true; if(k==='q') swapFlag=true;
   if(connected && k==='b') toggleShop('manual');
   if(connected && k==='l') toggleLeaderboard();
+  if(connected && k==='p') toggleWho();
   if(connected && k==='e' && snap && snap.you && snap.you.zone && $('shop').classList.contains('hidden')) openStore(snap.you.zone);
   if(k==='m'){ muted=!muted; toast(muted?'🔇 sound off':'🔊 sound on'); }
   if(connected && (k==='tab'||k==='v')){ peek=!peek; setPeekBtn(); toast(peek?'🔍 Pan mode ON, move mouse to look around':'Pan mode off'); }
@@ -369,6 +377,7 @@ function onMsg(m){
   else if(m.t==='classupresult'){ if(m.money!=null){ $('shopWallet').textContent=m.money; if(snap&&snap.you) snap.you.money=m.money; } if(m.classTiers&&snap&&snap.you) snap.you.classTiers=m.classTiers; if(m.msg) toast(m.ok?('✅ '+m.msg):('❌ '+m.msg)); if(!$('shop').classList.contains('hidden')){buildGrid();} }
   else if(m.t==='pong'){ pingMs=Math.max(0,Math.round(performance.now()-m.ts)); const d=$('pingv'); if(d){ d.textContent='ping '+pingMs+' ms'; d.style.color=pingMs<80?'#5b8c5b':(pingMs<160?'#caa44a':'#c46a6a'); } }
   else if(m.t==='leaderboard'){ renderLeaderboard(m); }
+  else if(m.t==='who'){ renderWho(m.players); }
 }
 function handleEvent(ev){
   if(ev.type==='splat') addSplat(ev.x,ev.y,ev.c);
@@ -727,6 +736,13 @@ function hud(){
 function decay(dt){ for(let i=feed.length-1;i>=0;i--){feed[i].t-=dt; if(feed[i].t<=0)feed.splice(i,1);} for(let i=toasts.length-1;i>=0;i--){toasts[i].t-=dt; if(toasts[i].t<=0)toasts.splice(i,1);} for(let i=chat.length-1;i>=0;i--){chat[i].t-=dt; if(chat[i].t<=0)chat.splice(i,1);} }
 
 function toggleLeaderboard(){ const p=$('leaderboard'); if(!p) return; if(p.classList.contains('hidden')){ p.classList.remove('hidden'); send({t:'leaderboard'}); } else p.classList.add('hidden'); }
+function toggleWho(){ const p=$('whopanel'); if(!p) return; if(p.classList.contains('hidden')){ p.classList.remove('hidden'); send({t:'who'}); } else p.classList.add('hidden'); }
+function renderWho(players){ const el=$('wholist'); if(!el) return; players=players||[]; const wc=$('whoCount'); if(wc) wc.textContent=players.length+(players.length===1?' player online':' players online');
+  const grp=(tm,label,col)=>{ const ps=players.filter(p=>p.team===tm); let h=`<div style="margin-bottom:12px"><div style="font-weight:700;color:${col};margin-bottom:5px">${label} · ${ps.length}</div>`;
+    if(!ps.length) h+='<div class="muted" style="font-size:13px">— nobody —</div>';
+    else for(const p of ps){ h+=`<div style="display:flex;justify-content:space-between;gap:10px;padding:4px 0;border-bottom:0.5px solid rgba(255,255,255,.07);font-size:14px"><span>${esc(p.name)}${p.id===myId?' <span style="color:#9be36a">(you)</span>':''}</span><span class="muted">Lv ${p.level} · ${p.cls}${p.alive?'':' · out'}</span></div>`; }
+    return h+'</div>'; };
+  el.innerHTML = grp('blue','🔵 Blue team','#3da9fc') + grp('red','🔴 Red team','#ff5470'); }
 function updateFieldStore(y){ const el=$('fieldstore'); if(!el) return; const e=y&&y.eng;
   const show=e&&y.alive&&snap&&snap.phase==='active';
   el.classList.toggle('hidden',!show); if(!show) return;
@@ -747,6 +763,7 @@ function closeShop(){ shopOpenedBy=null; $('shop').classList.add('hidden'); }
 function toggleShop(by){ if($('shop').classList.contains('hidden')) openShop(by); else closeShop(); }
 $('btnShop').onclick=()=>toggleShop('manual'); $('shopClose').onclick=closeShop;
 $('lbClose').onclick=()=>$('leaderboard').classList.add('hidden');
+$('btnWho').onclick=()=>toggleWho(); $('whoClose').onclick=()=>$('whopanel').classList.add('hidden');
 $('resetBtn').onclick=()=>{ if(snap&&snap.you) send({t:'resetloadout'}); };
 function setPeekBtn(){ const b=$('btnPeek'); if(b) b.classList.toggle('on',peek); }
 $('btnPeek').onclick=()=>{ peek=!peek; setPeekBtn(); toast(peek?'🔍 Pan mode ON, move mouse to look around':'Pan mode off'); };

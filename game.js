@@ -51,7 +51,7 @@ const HEAVY_CLASSES=['VetTrooper','HeavyWeapons','Officer'];
 function weightCapacity(level){ return 10 + Math.floor(level/3)*2; }   // higher cap so two guns are viable; rewards leveling
 function modW(list){ let w=0; for(const m of (list||[])){ const d=WEAPON_MODS[m]; if(d) w+=d.wt||0; } return w; }
 const LEVELUP_BONUS=20;                 // coins per level gained
-const BUILD='hvpb-2026.06.14.55';        // bump on each change; shown in-game to verify deploys
+const BUILD='hvpb-2026.06.14.56';        // bump on each change; shown in-game to verify deploys
 
 // progression
 const CLASS_UNLOCK_LEVEL=10, LVL_BASE=2, LVL_STEP=1;
@@ -423,6 +423,7 @@ class Game {
     const overall=board(s=>({splats:s.splats||0,psplats:s.psplats||0,shots:s.shots||0}));
     const byClass={}; for(const cls of CLASS_KEYS) byClass[cls]=board(s=>(s.byCls&&s.byCls[cls])||null);
     return { ...overall, byClass }; }
+  roster(){ const list=[]; for(const p of this.players.values()) list.push({ id:p.id, name:p.name, team:p.team, cls:p.cls, level:this.getLevel(p), alive:!!p.alive, ready:p.ready!==false }); return list; }
   classTierOf(p){ if(p.bot) return 1; const m=this.classTiers[p.key]; return (m&&m[p.cls])||1; }
   upgradeClass(id){ const p=this.players.get(id); if(!p||p.bot) return {ok:false}; if(this.phase==='active' && p.alive) return {ok:false,msg:'Locked during the round.'};
     if(!['Sniper','Scout','Infiltrator','VetTrooper'].includes(p.cls)) return {ok:false,msg:'No class upgrade for this class yet'};
