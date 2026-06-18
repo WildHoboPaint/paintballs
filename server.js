@@ -203,6 +203,12 @@ class Conn {
         this.send({ t:'engresult', ...r });
         break;
       }
+      case 'upgradestore': {
+        if (this.playerId == null) return;
+        const r = game.upgradeStore(this.playerId);
+        this.send({ t:'storeresult', ...r });
+        break;
+      }
       case 'resetloadout': {
         if (this.playerId == null) return;
         const r = game.resetLoadout(this.playerId);

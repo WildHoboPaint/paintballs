@@ -128,7 +128,8 @@
   #btnGadgetT{ right:14px; bottom:160px; }
   #btnUltT{ right:14px; bottom:232px; color:#ffd166; }
   #btnSwapT{ right:14px; bottom:304px; color:#7ad7ff; display:none; }
-  #fieldstore{ position:fixed; left:50%; transform:translateX(-50%); bottom:92px; background:rgba(12,20,28,.93); border:1px solid #3a4f2a; border-radius:12px; padding:8px 10px; z-index:40; text-align:center; box-shadow:0 6px 24px rgba(0,0,0,.5) }
+  #fieldstore{ position:fixed; left:50%; transform:translateX(-50%); bottom:92px; background:rgba(12,20,28,.95); border:1px solid #3a4f2a; border-radius:12px; padding:8px 12px; z-index:40; text-align:center; box-shadow:0 6px 24px rgba(0,0,0,.5); pointer-events:auto }
+  #fieldstore .fsnote{ font-size:10px; color:#8aa0b3; margin-top:6px }
   #fieldstore.hidden{ display:none }
   #fieldstore .fshd{ font-size:12px; font-weight:800; color:#ffd166; margin-bottom:6px }
   #fieldstore .fsrow{ display:flex; gap:6px; flex-wrap:wrap; justify-content:center }
@@ -161,9 +162,9 @@
     <button id="btnGadgetT" class="touchbtn" title="Gadget">✸</button>
     <button id="btnUltT" class="touchbtn" title="Ultimate">⚡</button>
     <button id="btnSwapT" class="touchbtn" title="Swap weapon">⇄</button>
-  <div id="fieldstore" class="hidden"><div class="fshd" id="fsHead">🛠 Field Store</div><div class="fsrow">
-    <button class="fsb" data-it="bot"></button><button class="fsb" data-it="pellet_turret"></button><button class="fsb" data-it="grenade_turret"></button><button class="fsb" data-it="rocket_turret"></button><button class="fsb" data-it="upgrade"></button>
-  </div></div>
+  <div id="fieldstore" class="hidden"><div class="fshd" id="fsHead">Field Store</div><div class="fsrow">
+    <button class="fsb" data-it="bot"></button>
+  </div><div class="fsnote" id="fsNote">build turrets with G · upgrade store in loadout</div></div>
     <div id="chat"><div id="chatlog"></div><input id="chatInput" maxlength="160" placeholder="Press Enter to chat" autocomplete="off"></div>
     <div id="lowerleft">
       <div id="hpwrap">
@@ -264,7 +265,7 @@ if(IS_TOUCH) document.addEventListener('DOMContentLoaded',()=>document.body.clas
 let shopOpenedBy=null, activeTab='class', myLoadout=null, loadCfg=null, classUnlock=null, modSlot=0, lbData=null, lbClass='overall';
 let lastBuy=null, pendingClass=null;
 let lobby=null, lobbyCanvas=null, freeCam={x:0,y:0}, storeCats=null;
-let actx=null, muted=false, prevAmmo=null, prevClip=null, prevDowned=false, bannerT=null; let peek=false; let myPos=null, srvPos=null; let chat=[]; let shake=0, hitMarkerT=0, myAim=0; const muzzles=[]; const CLIENT_BUILD='hvpb-2026.06.14.50';
+let actx=null, muted=false, prevAmmo=null, prevClip=null, prevDowned=false, bannerT=null; let peek=false; let myPos=null, srvPos=null; let chat=[]; let shake=0, hitMarkerT=0, myAim=0; const muzzles=[]; const CLIENT_BUILD='hvpb-2026.06.14.51';
 function aud(){ if(!actx){ try{ actx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } return actx; }
 function blip(type,freq,dur,vol,ramp){ if(muted) return; const a=aud(); if(!a) return; try{ const o=a.createOscillator(),g=a.createGain(); o.type=type; o.frequency.value=freq; if(ramp) o.frequency.exponentialRampToValueAtTime(Math.max(30,freq+ramp),a.currentTime+dur); g.gain.value=vol; g.gain.exponentialRampToValueAtTime(0.0001,a.currentTime+dur); o.connect(g); g.connect(a.destination); o.start(); o.stop(a.currentTime+dur); }catch(e){} }
 const sfx={
@@ -361,6 +362,7 @@ function onMsg(m){
   else if(m.t==='voteresult'){ if(!$('shop').classList.contains('hidden') && activeTab==='modes') buildGrid(); }
   else if(m.t==='upgraderesult'){ if(m.money!=null){ $('shopWallet').textContent=m.money; if(snap&&snap.you) snap.you.money=m.money; } if(m.tiers&&snap&&snap.you) snap.you.tiers=m.tiers; if(m.msg) toast(m.ok?('✅ '+m.msg):('❌ '+m.msg)); if(!$('shop').classList.contains('hidden')){buildGrid();} }
   else if(m.t==='engresult'){ if(m.money!=null&&snap&&snap.you) snap.you.money=m.money; if(m.msg) toast(m.ok?('✅ '+m.msg):('❌ '+m.msg)); }
+  else if(m.t==='storeresult'){ if(m.money!=null&&snap&&snap.you) snap.you.money=m.money; if(m.storeLevel!=null&&snap&&snap.you&&snap.you.eng) snap.you.eng.storeLevel=m.storeLevel; if(m.msg) toast(m.ok?('✅ '+m.msg):('❌ '+m.msg)); if(!$('shop').classList.contains('hidden')) buildGrid(); }
   else if(m.t==='classupresult'){ if(m.money!=null){ $('shopWallet').textContent=m.money; if(snap&&snap.you) snap.you.money=m.money; } if(m.classTiers&&snap&&snap.you) snap.you.classTiers=m.classTiers; if(m.msg) toast(m.ok?('✅ '+m.msg):('❌ '+m.msg)); if(!$('shop').classList.contains('hidden')){buildGrid();} }
   else if(m.t==='pong'){ pingMs=Math.max(0,Math.round(performance.now()-m.ts)); const d=$('pingv'); if(d){ d.textContent='ping '+pingMs+' ms'; d.style.color=pingMs<80?'#5b8c5b':(pingMs<160?'#caa44a':'#c46a6a'); } }
   else if(m.t==='leaderboard'){ renderLeaderboard(m); }
@@ -378,6 +380,7 @@ function handleEvent(ev){
     if(ev.vtId===myId){ sfx.hurt(); addShake(16); } }
   else if(ev.type==='laststand'){ if(ev.id===myId){ showBanner('LAST STAND — SPLAT BACK!','#ff5252'); sfx.hurt(); addShake(8); } else if(ev.byId===myId){ if(sfx.splat)sfx.splat(); hitMarkerT=0.3; toast('🩸 LAST STAND — hit them again to finish!'); } }
   else if(ev.type==='lstrade'){ if(ev.id===myId){ if(ev.clinch){ showBanner('CLUTCH TRADE — DRAW!','#ffd166'); sfx.level(); } else { showBanner('TOOK ONE DOWN','#ffb84d'); sfx.splat&&sfx.splat(); } } }
+  else if(ev.type==='toast') toast(ev.text);
   else if(ev.type==='msg') toast(ev.text);
   else if(ev.type==='capture'){ const mine=snap&&snap.you&&ev.team===snap.you.team; showBanner((mine?'FLAG CAPTURED ':'ENEMY SCORED ')+(ev.caps?ev.caps.blue+'-'+ev.caps.red:''), mine?'#9be36a':'#ff6b6b'); sfx.level(); toast('🚩 '+ev.by+' scored for '+ev.team.toUpperCase()+'!'); }
   else if(ev.type==='flaggrab'){ const mine=snap&&snap.you&&ev.team===snap.you.team; if(mine){ showBanner('⚠ YOUR FLAG TAKEN!','#ff6b6b'); sfx.hurt(); toast('⚠ '+ev.by+' grabbed YOUR flag, stop them!'); } else toast('🚩 '+ev.by+' grabbed the '+ev.team.toUpperCase()+' flag!'); }
@@ -683,7 +686,7 @@ function hud(){
     $('hpNum').textContent=dz+'%'; $('clsName').textContent=y.cls;
     { const rl=y.reloading, clip=(y.clip==null?(y.clipMax||0):y.clip), cm=y.clipMax||0, pool=(y.ammo<0?'∞':y.ammo);
       $('ammo').innerHTML=(y.melee?`<span style="color:#9b5de5">⚔ MELEE</span>`:`AMMO ${rl?'<span style="color:#ffb84d">⟳ RELOADING</span>':(clip+' / '+cm)} <span style="opacity:.55">· pool ${pool}</span>`)+(y.ammoSel==='fast'?` · <span style="color:#ff6b6b">⚡Fast ${y.fastAmmo||0}</span>`:'')+(y.golden?` · <span style="color:#ffd700">${y.goldenArmed?'★ARMED':(y.goldenReady?'GOLD [F]':'gold…')}</span>`:''); }
-    let gl=''; if(y.gadget==='mine') gl=`Mines: ${y.mineCharges} <span style="color:#8aa0b3">[G]</span>`; else if(y.gadget==='turret') gl=y.hasTurret?'Turret: deployed':'Turret ready <span style="color:#8aa0b3">[G]</span>'; else if(y.gadget==='jetpack') gl='Jetpack active'; else if(y.gadget==='decoy') gl=`Decoys: ${y.mineCharges||0} <span style="color:#8aa0b3">[G]</span>`; else if(y.gadget==='store'){ const e=y.eng||{}; gl = e.hasStore ? (e.near?'<span style="color:#9be36a">Field Store ✓ buy below</span>':'Store placed — return to it to buy') : (e.storeCD>0?('Store rebuild '+e.storeCD+'s'):'Drop Field Store <span style="color:#8aa0b3">[G]</span>'); } else gl='No gadget';
+    let gl=''; if(y.gadget==='mine') gl=`Mines: ${y.mineCharges} <span style="color:#8aa0b3">[G]</span>`; else if(y.gadget==='turret'||y.gadget==='grenade_turret'||y.gadget==='rocket_turret'){ if(y.eng){ const tn=({turret:'Pellet',grenade_turret:'Grenade',rocket_turret:'Rocket'})[y.gadget]; const cost=(y.eng.costs&&y.eng.costs[y.gadget==='turret'?'pellet_turret':y.gadget])||0; gl=`${tn} turret ${y.eng.turrets}/${y.eng.maxTurrets} <span style="color:#8aa0b3">[G] 💰${cost}</span>`; } else gl=y.hasTurret?'Turret: deployed':'Turret ready <span style="color:#8aa0b3">[G]</span>'; } else if(y.gadget==='jetpack') gl='Jetpack active'; else if(y.gadget==='decoy') gl=`Decoys: ${y.mineCharges||0} <span style="color:#8aa0b3">[G]</span>`; else gl='No gadget';
     { const w1=(catalog&&catalog.weapon[y.equip.weapon]||{}).name||y.equip.weapon; let wpl;
         if(y.equip.weapon2 && y.equip.weapon2!=='none'){ const w2=(catalog&&catalog.weapon[y.equip.weapon2]||{}).name||y.equip.weapon2; wpl=`<b style="color:#fff">${w1}</b><span style="color:#7ad7ff"> ⇄ ${w2} [Q]</span>`; }
         else wpl=`<b style="color:#cfe9ff">${w1}</b>`;
@@ -723,15 +726,11 @@ function decay(dt){ for(let i=feed.length-1;i>=0;i--){feed[i].t-=dt; if(feed[i].
 
 function toggleLeaderboard(){ const p=$('leaderboard'); if(!p) return; if(p.classList.contains('hidden')){ p.classList.remove('hidden'); send({t:'leaderboard'}); } else p.classList.add('hidden'); }
 function updateFieldStore(y){ const el=$('fieldstore'); if(!el) return; const e=y&&y.eng;
-  const show=e&&y.alive&&e.hasStore&&e.near&&snap&&snap.phase==='active';
+  const show=e&&y.alive&&snap&&snap.phase==='active';
   el.classList.toggle('hidden',!show); if(!show) return;
-  $('fsHead').textContent=`🛠 Field Store · L${e.storeLevel} · 💰 ${y.money}`; const c=e.costs||{};
-  const setb=(it,label,cost,n,max)=>{ const b=el.querySelector('[data-it="'+it+'"]'); if(!b) return; const capHit=(n>=max); b.disabled=capHit||y.money<cost; b.innerHTML=label+(n!=null?` <span style="opacity:.6">${n}/${max}</span>`:'')+`<br>💰${cost}`+(capHit?' MAX':''); };
-  setb('bot','🤖 Bot',c.bot,e.bots,e.maxBots);
-  setb('pellet_turret','• Pellet',c.pellet_turret,e.turrets,e.maxTurrets);
-  setb('grenade_turret','◎ Grenade',c.grenade_turret,e.turrets,e.maxTurrets);
-  setb('rocket_turret','▲ Rocket',c.rocket_turret,e.turrets,e.maxTurrets);
-  const up=el.querySelector('[data-it="upgrade"]'); if(up){ if(e.upCost>0){ up.disabled=y.money<e.upCost; up.innerHTML=`⬆ Store L${e.storeLevel+1}<br>💰${e.upCost}`; } else { up.disabled=true; up.innerHTML='Store<br>MAX'; } } }
+  $('fsHead').textContent=`Field Store · turrets ${e.turrets}/${e.maxTurrets} · bots ${e.bots}/${e.maxBots} · 💰 ${y.money}`;
+  const c=e.costs||{}, cost=c.bot||0, capHit=(e.bots>=e.maxBots); const b=el.querySelector('[data-it="bot"]');
+  if(b){ b.disabled=capHit||y.money<cost; b.innerHTML=`🤖 Buy Bot · 💰${cost}`+(capHit?' (cap — raise Store Level)':''); } }
 function lbShort(c){ return ({VetTrooper:'Vet',HeavyWeapons:'Heavy'})[c]||c; }
 function renderLeaderboard(d){ lbData=d; lbClass='overall'; renderLbTabs(); renderLbCols(); }
 function renderLbTabs(){ const tb=$('lbtabs'); if(!tb||!lbData) return; const keys=['overall'].concat(lbData.byClass?Object.keys(lbData.byClass):[]); tb.innerHTML='';
@@ -779,7 +778,7 @@ function buildGrid(){
   if(activeTab!=='modes') grid.appendChild(ldSummary(y));
   if(snap.phase==='active' && snap.you.alive && activeTab!=='modes'){ const w=document.createElement('div'); w.className='item lock'; w.innerHTML='<div class="in"><span>\uD83D\uDD12 Loadout locked</span></div><div class="id">Gear changes only between rounds, in the holding area. (Mode voting still works.)</div>'; grid.appendChild(w); return; }
   if(activeTab==='class'){
-    { const CTc={2:600,3:1200,4:2000,5:3000}; const perks={Sniper:'Sharper vision: fewer blind squares up close.',Scout:'Faster movement speed.',Infiltrator:'Faster movement speed (longer invisibility coming soon).',VetTrooper:'Last Stand: longer armed window + more time to take someone down before you fall (a draw if you splat the last enemy). Also softens weapon-mod downsides.'};
+    { const CTc={2:600,3:1200,4:2000,5:3000}; const perks={Sniper:'Sharper vision: fewer blind squares up close.',Scout:'Faster movement speed.',Infiltrator:'Faster movement speed (longer invisibility coming soon).',VetTrooper:'Last Stand: longer armed window + more time to take someone down before you fall (a draw if you splat the last enemy). Also softens weapon-mod downsides.',Engineer:'Build more turrets at once — turret cap rises with class tier.'};
       if(perks[y.cls]){ const ct=(y.classTiers&&y.classTiers[y.cls])||y.classTier||1;
         const el=document.createElement('div'); el.className='item eq';
         el.innerHTML=`<div class="in"><span>⭐ CLASS PERK · ${y.cls} <span style="color:#9be36a">T${ct}/5</span></span></div><div class="id">Improves your class ability (separate from the weapon). ${perks[y.cls]}</div>`;
@@ -791,6 +790,13 @@ function buildGrid(){
           else { up.className='upbtn'; up.textContent=`Class Upgrade → T${ct+1} (💰${cost})`; up.onclick=()=>send({t:'upgradeclass'}); }
           row.appendChild(up); }
         el.appendChild(row); grid.appendChild(el); } }
+    if(y.cls==='Engineer' && y.eng){ const sl=y.eng.storeLevel||1, up=y.eng.upCost||0;
+      const el=document.createElement('div'); el.className='item eq';
+      el.innerHTML=`<div class="in"><span>🛠 STORE LEVEL <span style="color:#9be36a">L${sl}/3</span></span></div><div class="id">Raises your in-round bot cap (now ${Math.min(6,sl*2)} bots). Build turrets with G during the round; this only sets the bot cap.</div>`;
+      const row=document.createElement('div'); row.style.cssText='display:flex;gap:6px;margin-top:6px';
+      if(up<=0){ const b=document.createElement('button'); b.textContent='Max Store Level'; b.disabled=true; row.appendChild(b); }
+      else { const b=document.createElement('button'); if(y.money<up){ b.textContent=`Upgrade 💰${up}`; b.disabled=true; } else { b.className='upbtn'; b.textContent=`Store Level → L${sl+1} (💰${up})`; b.onclick=()=>send({t:'upgradestore'}); } row.appendChild(b); }
+      el.appendChild(row); grid.appendChild(el); }
     for(const k in classesInfo){ const ci=classesInfo[k]; const req=(classUnlock&&classUnlock[k])||(k==='Trooper'?1:10); const locked=(y.level||1)<req; const cur=y.cls===k;
       const el=document.createElement('div'); el.className='item'+(cur?' eq':'')+(locked?' lock':'');
       el.innerHTML=`<div class="in"><span><span style="color:${CLS_COLORS[k]||'#fff'}">●</span> ${k}</span>${locked?`<span class="cost">Lv ${req}</span>`:''}</div><div class="id">${ci.desc||''}</div>`;

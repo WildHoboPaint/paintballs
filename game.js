@@ -44,14 +44,14 @@ const BOT_BONUS=10;                                    // coins per bot splatted
 const CAPTURE_TARGET=3;                                // CTF captures to win
 const TOURNEY_WINS=3;                                  // best of 5
 const ANTE_OPTIONS=[100,500,1000];                    // selectable buy-in amounts
-const WMOD_SLOTS=2, CHIP_SLOTS=5, MAX_CAMO=2, BASE_AMMO=30, WEAPON_WT=4, BALL_SPEED=140, GOLDEN_CD=2.0;
+const WMOD_SLOTS=2, CHIP_SLOTS=5, MAX_CAMO=2, BASE_AMMO=30, WEAPON_WT=4, BALL_SPEED=150, GOLDEN_CD=2.0;
 const LAST_GASP=2.0;   // seconds you can still return fire after being hit (draw / double-splat window)
 const MAXTIER=5, BOT_TIER=3, SNIPER_BLIND=160; const TIER_COST={2:600,3:1200,4:2000,5:3000};   // weapon upgrade tiers
 const HEAVY_CLASSES=['VetTrooper','HeavyWeapons','Officer'];
 function weightCapacity(level){ return 10 + Math.floor(level/3)*2; }   // higher cap so two guns are viable; rewards leveling
 function modW(list){ let w=0; for(const m of (list||[])){ const d=WEAPON_MODS[m]; if(d) w+=d.wt||0; } return w; }
 const LEVELUP_BONUS=20;                 // coins per level gained
-const BUILD='hvpb-2026.06.14.50';        // bump on each change; shown in-game to verify deploys
+const BUILD='hvpb-2026.06.14.51';        // bump on each change; shown in-game to verify deploys
 
 // progression
 const CLASS_UNLOCK_LEVEL=10, LVL_BASE=2, LVL_STEP=1;
@@ -80,8 +80,8 @@ const CLASSES = {
                 weapons:['sniper_rifle','pball_rifle'], gear:['mine'],
                 desc:"Long-range one-shot specialist." },
   Engineer:   { hp:115, speed:170, color:'#ffd166', defWeapon:'pball_gun', ult:'mortar',
-                weapons:['pball_gun'], gear:['store'],
-                desc:"Field commander. Drop a store (G) to buy bots & turrets; man the Mortar (Space)." },
+                weapons:['pball_gun'], gear:['turret','grenade_turret','rocket_turret'],
+                desc:"Field commander. Build turrets (G), call in bots, man the Mortar (Space)." },
   Officer:    { hp:120, speed:185, color:'#3da9fc', defWeapon:'assault_rifle',
                 weapons:['assault_rifle','auto_pistol','pball_rifle'], gear:['turret'],
                 desc:"Command. Satellite vision, assault rifle." },
@@ -121,8 +121,9 @@ const ARMOR_CHIPS = {
 const GADGETS = {
   none:   { name:"No Gadget",  cost:0,    desc:"Empty gadget slot." },
   mine:   { name:"Paint Mines",cost:300,  charges:2, desc:"Press G to drop. Detonates on enemies (2/round)." },
-  turret: { name:"Auto Turret",cost:1200, desc:"Press G to deploy a Pellet Turret. No timeout; destroyed by 3 hits." },
-  store:  { name:"Field Store",cost:0, desc:"Engineer: press G to drop a mobile store, then buy bots & turrets near it." },
+  turret: { name:"Pellet Turret",cost:0, desc:"Press G to build. Rapid paint turret; destroyed by 3 hits." },
+  grenade_turret:{ name:"Grenade Turret",cost:0, desc:"Engineer: press G to build (costs coins per build). Lobbed area splat." },
+  rocket_turret:{ name:"Rocket Turret",cost:0, desc:"Engineer: press G to build (costs coins per build). Big rocket splat." },
   jetpack:{ name:"Jetpack",    cost:1500, passive:true, desc:"Ignore terrain slowdown (passive)." },
   decoy:  { name:"Decoy",      cost:400,  charges:2, desc:"Press G to drop a fake clone (2/round)." },
 };
@@ -182,6 +183,7 @@ class Game {
     this.wallets=(saved&&saved.wallets)?Object.assign({},saved.wallets):{};
     this.tiers=(saved&&saved.tiers)?Object.assign({},saved.tiers):{};   // account key -> { weaponId: tier }
     this.classTiers=(saved&&saved.classTiers)?Object.assign({},saved.classTiers):{};   // account key -> { className: tier }
+    this.storeLevels=(saved&&saved.storeLevels)?Object.assign({},saved.storeLevels):{};   // Engineer store level (raises bot cap)
     this.prefs=(saved&&saved.prefs)?Object.assign({},saved.prefs):{};   // account key -> { cls, equip, modeVotes } (persist across logins)
     this.waveRecord=(saved&&saved.waveRecord)?saved.waveRecord:{wave:0,name:''};   // highest Bot Invaders wave + who reached it
     this.ammoStock=(saved&&saved.ammoStock)?Object.assign({},saved.ammoStock):{};   // key -> { fast: shots } consumable special ammo
@@ -209,7 +211,7 @@ class Game {
     if(cat==='wmod'||cat==='chip') return (((this.inv[p.key]||{})[cat+':'+id])||0)>0;
     return this.ownedSet(p.key).includes(cat+':'+id); }
   invCount(p,catid){ return ((this.inv[p.key]||{})[catid])||0; }
-  serialize(){ return { wallets:this.wallets, owned:this.owned, xp:this.xp, accounts:this.accounts, tiers:this.tiers, inv:this.inv, classTiers:this.classTiers, prefs:this.prefs, waveRecord:this.waveRecord, ammoStock:this.ammoStock, lifeStats:this.lifeStats }; }
+  serialize(){ return { wallets:this.wallets, owned:this.owned, xp:this.xp, accounts:this.accounts, tiers:this.tiers, inv:this.inv, classTiers:this.classTiers, storeLevels:this.storeLevels, prefs:this.prefs, waveRecord:this.waveRecord, ammoStock:this.ammoStock, lifeStats:this.lifeStats }; }
   savePrefs(p){ if(!p||p.bot||!p.key) return; this.prefs[p.key]={ cls:p.cls, equip:{weapon:p.equip.weapon,wmods:(p.equip.wmods||[]).slice(),chips:(p.equip.chips||[]).slice(),gadget:p.equip.gadget,weapon2:p.equip.weapon2||null,wmods2:(p.equip.wmods2||[]).slice()}, modeVotes:Object.assign({},p.modeVotes||{}) }; }
   restorePrefs(f){ const pr=this.prefs[f.key]; if(!pr) return;
     if(pr.cls && CLASSES[pr.cls] && this.getLevel(f)>=(CLASS_UNLOCK[pr.cls]||1)) f.cls=pr.cls;
@@ -424,7 +426,7 @@ class Game {
     return { ...overall, byClass }; }
   classTierOf(p){ if(p.bot) return 1; const m=this.classTiers[p.key]; return (m&&m[p.cls])||1; }
   upgradeClass(id){ const p=this.players.get(id); if(!p||p.bot) return {ok:false}; if(this.phase==='active' && p.alive) return {ok:false,msg:'Locked during the round.'};
-    if(!['Sniper','Scout','Infiltrator','VetTrooper'].includes(p.cls)) return {ok:false,msg:'No class upgrade for this class yet'};
+    if(!['Sniper','Scout','Infiltrator','VetTrooper','Engineer'].includes(p.cls)) return {ok:false,msg:'No class upgrade for this class yet'};
     const m=this.classTiers[p.key]||(this.classTiers[p.key]={}); const cur=m[p.cls]||1;
     if(cur>=MAXTIER) return {ok:false,money:this.getMoney(p),classTiers:m,msg:'Max class tier'};
     const tc=cur+1, ccost=TIER_COST[tc]||9999, clvl=(tc-1)*3;
@@ -489,7 +491,7 @@ class Game {
     let useFast=false; if(f.equip.ammo==='fast' && !f.bot && f.key && !st.splash){ const s=this.ammoStock[f.key]; if(s && (s.fast||0)>0){ s.fast--; useFast=true; } }
     let pf=st.scope, lob=st.lob, range=st.range, proj=st.proj, bspeed=st.pspeed, col=(wdef.color||paintColor(wdef,'normal')), splash=st.splash;
     if(useFast){ bspeed*=AMMO.fast.speedMul; col=AMMO.fast.color; }
-    if(useGolden){ f.goldenArmed=false; f.goldenCD=GOLDEN_CD; range=wdef.range*2.5; bspeed=210; col='#ffd700'; pf=true; lob=false; proj=1; splash=0; this.emit({type:'golden',x:Math.round(f.x),y:Math.round(f.y)}); }
+    if(useGolden){ f.goldenArmed=false; f.goldenCD=GOLDEN_CD; range=wdef.range*2.5; bspeed=360; col='#ffd700'; pf=true; lob=false; proj=1; splash=0; this.emit({type:'golden',x:Math.round(f.x),y:Math.round(f.y)}); }
     const reach=Math.min(range, (f.input&&f.input.aimDist>0)?f.input.aimDist:range);  // shoot short if you aim short
     for(let i=0;i<proj;i++){
       const ang=f.aim+(Math.random()-0.5)*st.spread*2;
@@ -501,28 +503,34 @@ class Game {
   deploy(f){
     if(!f.alive) return; const g=f.equip.gadget;
     if(g==='mine'){ if(f.mineCharges<=0) return; f.mineCharges--; this.mines.push({id:this.nextId++,x:f.x,y:f.y,team:f.team,owner:f.id,arm:1.0,r:58}); this.emit({type:'deploy',kind:'mine',team:f.team}); }
-    else if(g==='turret'){ if(f.hasTurret) return; f.hasTurret=true; this.spawnTurret(f,'base',f.x,f.y); this.emit({type:'deploy',kind:'turret',team:f.team}); }
-    else if(g==='store'){ if((f.storeCD||0)>0 || this.stores.some(s=>s.owner===f.id)) return; const sid=this.nextId++; this.stores.push({id:sid,x:f.x,y:f.y,team:f.team,owner:f.id,hp:6,maxhp:6,level:1}); f.storeId=sid; this.emit({type:'deploy',kind:'store',team:f.team}); }
+    else if(g==='turret'||g==='grenade_turret'||g==='rocket_turret'){ const kind=g==='grenade_turret'?'grenade':(g==='rocket_turret'?'rocket':'base');
+      if(f.cls==='Engineer'){ const cap=this.engTurretCap(f); if(this.engTurrets(f.id)>=cap){ this.emit({type:'toast',to:f.id,text:`Turret cap ${cap} reached — upgrade class to build more`}); return; }
+        const cost=ENG_COST[g==='turret'?'pellet_turret':g]||0; if(this.getMoney(f)<cost){ this.emit({type:'toast',to:f.id,text:`Need ${cost} coins to build that turret`}); return; }
+        this.addMoney(f,-cost); this.spawnTurret(f,kind,f.x,f.y); this.emit({type:'deploy',kind:'turret',team:f.team}); }
+      else { if(f.hasTurret) return; f.hasTurret=true; this.spawnTurret(f,kind,f.x,f.y); this.emit({type:'deploy',kind:'turret',team:f.team}); } }
     else if(g==='decoy'){ if(f.decoyCharges<=0) return; f.decoyCharges--; this.decoys.push({id:this.nextId++,x:f.x,y:f.y,team:f.team,cls:f.cls,life:12}); }
   }
   spawnTurret(owner,kind,x,y){ const range=kind==='rocket'?520:(kind==='grenade'?470:420); this.turrets.push({id:this.nextId++,x,y,team:owner.team,owner:owner.id,hp:TURRET_HP,maxhp:TURRET_HP,cool:0,range,kind}); }
   engBots(id){ let n=0; for(const b of this.bots) if(b.engOwner===id&&b.alive) n++; return n; }
   engTurrets(id){ let n=0; for(const tr of this.turrets) if(tr.owner===id) n++; return n; }
-  engCaps(p){ const store=this.stores.find(s=>s.owner===p.id); const lvl=store?store.level:0; const ct=this.classTierOf(p); return { maxTurrets:Math.min(4,ct), maxBots:Math.min(6,lvl*2), storeLevel:lvl }; }
-  spawnEngBot(p,store){ const pool=CLASS_KEYS.filter(c=>c!=='Engineer'); const ck=pool[Math.floor(rand(0,pool.length))]; const b=this.newFighter(p.team,ck,true); b.engOwner=p.id; b.x=store.x+rand(-34,34); b.y=store.y+rand(-34,34); b.alive=true; const st=this.stats(b); b.maxhp=st.hp; b.hp=st.hp; b.ammo=st.ammoPool; b.clip=st.mag; this.bots.push(b); }
+  engStoreLevel(p){ return (p.key && this.storeLevels[p.key]) || 1; }
+  engTurretCap(p){ return Math.min(4, this.classTierOf(p)); }
+  engBotCap(p){ return Math.min(6, this.engStoreLevel(p)*2); }
+  engCaps(p){ return { maxTurrets:this.engTurretCap(p), maxBots:this.engBotCap(p), storeLevel:this.engStoreLevel(p) }; }
+  spawnEngBot(p){ const pool=CLASS_KEYS.filter(c=>c!=='Engineer'); const ck=pool[Math.floor(rand(0,pool.length))]; const b=this.newFighter(p.team,ck,true); b.engOwner=p.id; b.x=p.x+rand(-42,42); b.y=p.y+rand(-42,42); b.alive=true; const st=this.stats(b); b.maxhp=st.hp; b.hp=st.hp; b.ammo=st.ammoPool; b.clip=st.mag; this.bots.push(b); }
   engbuy(id,item){ const p=this.players.get(id); if(!p||p.bot) return {ok:false,msg:'no player'};
     if(p.cls!=='Engineer') return {ok:false,msg:'Engineers only'};
     if(this.phase!=='active'||!p.alive) return {ok:false,money:this.getMoney(p),msg:'Only in-round, while alive'};
-    const store=this.stores.find(s=>s.owner===p.id); if(!store) return {ok:false,money:this.getMoney(p),msg:'Drop your Field Store first (G)'};
-    if(dist2(p.x,p.y,store.x,store.y) > (3.2*TILE)*(3.2*TILE)) return {ok:false,money:this.getMoney(p),msg:'Get closer to your store'};
-    const caps=this.engCaps(p);
-    if(item==='upgrade'){ const nl=store.level+1, cost=ENG_STORE_UP[nl]; if(!cost) return {ok:false,money:this.getMoney(p),msg:'Store at max level'}; if(this.getMoney(p)<cost) return {ok:false,money:this.getMoney(p),msg:'Not enough Paint Coins'}; this.addMoney(p,-cost); store.level=nl; return {ok:true,money:this.getMoney(p),msg:`Store upgraded to L${nl}`}; }
-    if(item==='bot'){ if(this.engBots(p.id)>=caps.maxBots) return {ok:false,money:this.getMoney(p),msg:`Bot cap ${caps.maxBots} reached — upgrade store`}; const cost=ENG_COST.bot; if(this.getMoney(p)<cost) return {ok:false,money:this.getMoney(p),msg:'Not enough Paint Coins'}; this.addMoney(p,-cost); this.spawnEngBot(p,store); return {ok:true,money:this.getMoney(p),msg:'Bot deployed'}; }
-    const kindMap={pellet_turret:'base',grenade_turret:'grenade',rocket_turret:'rocket'}, kind=kindMap[item];
-    if(!kind) return {ok:false,money:this.getMoney(p),msg:'Unknown item'};
-    if(this.engTurrets(p.id)>=caps.maxTurrets) return {ok:false,money:this.getMoney(p),msg:`Turret cap ${caps.maxTurrets} reached — level up class`};
-    const cost=ENG_COST[item]; if(this.getMoney(p)<cost) return {ok:false,money:this.getMoney(p),msg:'Not enough Paint Coins'};
-    this.addMoney(p,-cost); this.spawnTurret(p,kind,p.x+rand(-16,16),p.y+rand(-16,16)); return {ok:true,money:this.getMoney(p),msg:`${item.replace('_',' ')} placed`}; }
+    if(item!=='bot') return {ok:false,money:this.getMoney(p),msg:'Build turrets with G; upgrade in the loadout'};
+    const cap=this.engBotCap(p); if(this.engBots(p.id)>=cap) return {ok:false,money:this.getMoney(p),msg:`Bot cap ${cap} — raise Store Level in your loadout`};
+    const cost=ENG_COST.bot; if(this.getMoney(p)<cost) return {ok:false,money:this.getMoney(p),msg:'Not enough Paint Coins'};
+    this.addMoney(p,-cost); this.spawnEngBot(p); return {ok:true,money:this.getMoney(p),msg:'Bot deployed'}; }
+  upgradeStore(id){ const p=this.players.get(id); if(!p||p.bot) return {ok:false}; if(p.cls!=='Engineer') return {ok:false,msg:'Engineers only'};
+    if(this.phase==='active' && p.alive) return {ok:false,msg:'Upgrade in the holding area.'};
+    const cur=this.engStoreLevel(p), nl=cur+1, cost=ENG_STORE_UP[nl];
+    if(!cost) return {ok:false,money:this.getMoney(p),storeLevel:cur,msg:'Store at max level'};
+    if(this.getMoney(p)<cost) return {ok:false,money:this.getMoney(p),storeLevel:cur,msg:'Not enough Paint Coins'};
+    this.addMoney(p,-cost); this.storeLevels[p.key]=nl; return {ok:true,money:this.getMoney(p),storeLevel:nl,msg:`Store Level ${nl} — bot cap ${Math.min(6,nl*2)}`}; }
   swapWeapon(id){ const p=this.players.get(id); if(!p||!p.alive) return; const w2=p.equip.weapon2;
     if(!w2 || w2==='none' || (p.swapCD||0)>0) return;
     const w1=p.equip.weapon, m1=(p.equip.wmods||[]).slice();
@@ -826,9 +834,9 @@ class Game {
         const d=dist2(tr.x,tr.y,f.x,f.y); if(d<bd && this.canSee(tr,f)){ bd=d; best=f; } }
       if(best && tr.cool<=0){ const spread=tr.kind==='rocket'?0.12:(tr.kind==='grenade'?0.16:0.20);   // imperfect aim: keep moving and you can dodge turret fire
         const ang=Math.atan2(best.y-tr.y,best.x-tr.x)+(Math.random()-0.5)*spread*2; const sx=tr.x+Math.cos(ang)*18, sy=tr.y+Math.sin(ang)*18;
-        if(tr.kind==='grenade'){ tr.cool=1.5; this.balls.push({x:sx,y:sy,x0:tr.x,y0:tr.y,vx:Math.cos(ang),vy:Math.sin(ang),speed:130,dmg:1,team:tr.team,owner:tr.owner,life:tr.range/130,color:'#caa44a',r:6,pierce:false,splash:48,lob:true}); }
-        else if(tr.kind==='rocket'){ tr.cool=2.4; this.balls.push({x:sx,y:sy,x0:tr.x,y0:tr.y,vx:Math.cos(ang),vy:Math.sin(ang),speed:220,dmg:1,team:tr.team,owner:tr.owner,life:tr.range/220,color:'#ff7b00',r:7,pierce:false,splash:130}); }
-        else { tr.cool=0.30; this.balls.push({x:sx,y:sy,x0:tr.x,y0:tr.y,vx:Math.cos(ang),vy:Math.sin(ang),speed:760,dmg:1,team:tr.team,owner:tr.owner,life:tr.range/760,color:tr.team==='blue'?'#3da9fc':'#ff5470',r:5,pierce:false,splash:0}); } }
+        if(tr.kind==='grenade'){ tr.cool=2.0; this.balls.push({x:sx,y:sy,x0:tr.x,y0:tr.y,vx:Math.cos(ang),vy:Math.sin(ang),speed:130,dmg:1,team:tr.team,owner:tr.owner,life:tr.range/130,color:'#caa44a',r:6,pierce:false,splash:48,lob:true}); }
+        else if(tr.kind==='rocket'){ tr.cool=3.0; this.balls.push({x:sx,y:sy,x0:tr.x,y0:tr.y,vx:Math.cos(ang),vy:Math.sin(ang),speed:220,dmg:1,team:tr.team,owner:tr.owner,life:tr.range/220,color:'#ff7b00',r:7,pierce:false,splash:130}); }
+        else { tr.cool=0.50; this.balls.push({x:sx,y:sy,x0:tr.x,y0:tr.y,vx:Math.cos(ang),vy:Math.sin(ang),speed:760,dmg:1,team:tr.team,owner:tr.owner,life:tr.range/760,color:tr.team==='blue'?'#3da9fc':'#ff5470',r:5,pierce:false,splash:0}); } }
     }
   }
   updateStores(dt){ for(let i=this.stores.length-1;i>=0;i--){ const s=this.stores[i]; if(s.hp<=0){ this.emit({type:'boom',x:s.x,y:s.y}); const ow=this.findById(s.owner); if(ow){ ow.storeId=null; ow.storeCD=8; } this.stores.splice(i,1); } } }
@@ -869,7 +877,7 @@ class Game {
         ammo:(this.mode==='invaders'?-1:me.ammo),mag:st.ammoPool,clip:(me.clip==null?st.mag:me.clip),clipMax:st.mag,melee:!!st.melee,reloading:!!me.reloading,reloadFrac:(me.reloading&&st.reload>0?Math.max(0,Math.min(1,1-me.reloadT/st.reload)):1),kills:me.kills,deaths:me.deaths,money:this.getMoney(me),
         x:Math.round(me.x),y:Math.round(me.y),terrain:this.terrainCode(me.x,me.y),wantAnte:me.wantAnte,anteIn:me.anteIn,
         level:li.level, xpInto:li.into, xpNeed:li.need, unlockLevel:CLASS_UNLOCK_LEVEL, classUnlocked:li.level>=CLASS_UNLOCK_LEVEL,
-        deflect:st.deflect, zone:me.zone||null, equip:me.equip, owned:this.ownedSet(me.key), inv:this.inv[me.key]||{}, fastAmmo:((this.ammoStock[me.key]||{}).fast||0), ammoSel:(me.equip.ammo||'none'), mineCharges:me.mineCharges, hasTurret:me.hasTurret, gadget:me.equip.gadget, weight:(st.weight + (me.equip.weapon2&&me.equip.weapon2!=='none'?(WEAPON_WT+modW(me.equip.wmods2)):0)), weightCap:weightCapacity(li.level), golden:st.golden, goldenReady:(me.goldenCD||0)<=0, goldenArmed:!!me.goldenArmed, anteAmt:me.anteAmt||100, wantAnte:me.wantAnte, ready:me.ready!==false, modeVotes:me.modeVotes||{}, tiers:this.tiers[me.key]||{}, classTiers:this.classTiers[me.key]||{}, classTier:this.classTierOf(me), ult:(CLASSES[me.cls]&&CLASSES[me.cls].ult)||null, ultReady:!!me.ultReady, ultActive:me.ultActive||null, ultT:Math.max(0,me.ultT||0), evacT:Math.max(0,me.evacT||0), lsArmed:!!me.lsArmed, lsArmedT:Math.max(0,me.lsArmedT||0), lsActive:!!me.lsActive, lsT:Math.max(0,me.lsT||0), mortar:!!me.mortar, mortarShots:me.mortarShots||0, eng:(me.cls==='Engineer'?(()=>{ const caps=this.engCaps(me); const store=this.stores.find(s=>s.owner===me.id); const near=store?(dist2(me.x,me.y,store.x,store.y)<=(3.2*TILE)*(3.2*TILE)):false; return { hasStore:!!store, storeLevel:caps.storeLevel, near, turrets:this.engTurrets(me.id), maxTurrets:caps.maxTurrets, bots:this.engBots(me.id), maxBots:caps.maxBots, costs:ENG_COST, upCost:(ENG_STORE_UP[(caps.storeLevel||0)+1]||0), storeCD:Math.max(0,Math.round(me.storeCD||0)) }; })():null), spd:Math.round(st.speed*(me.equip.gadget==='jetpack'?1:(SPEED_MULT[this.terrainCode(me.x,me.y)]||1))) }; }
+        deflect:st.deflect, zone:me.zone||null, equip:me.equip, owned:this.ownedSet(me.key), inv:this.inv[me.key]||{}, fastAmmo:((this.ammoStock[me.key]||{}).fast||0), ammoSel:(me.equip.ammo||'none'), mineCharges:me.mineCharges, hasTurret:me.hasTurret, gadget:me.equip.gadget, weight:(st.weight + (me.equip.weapon2&&me.equip.weapon2!=='none'?(WEAPON_WT+modW(me.equip.wmods2)):0)), weightCap:weightCapacity(li.level), golden:st.golden, goldenReady:(me.goldenCD||0)<=0, goldenArmed:!!me.goldenArmed, anteAmt:me.anteAmt||100, wantAnte:me.wantAnte, ready:me.ready!==false, modeVotes:me.modeVotes||{}, tiers:this.tiers[me.key]||{}, classTiers:this.classTiers[me.key]||{}, classTier:this.classTierOf(me), ult:(CLASSES[me.cls]&&CLASSES[me.cls].ult)||null, ultReady:!!me.ultReady, ultActive:me.ultActive||null, ultT:Math.max(0,me.ultT||0), evacT:Math.max(0,me.evacT||0), lsArmed:!!me.lsArmed, lsArmedT:Math.max(0,me.lsArmedT||0), lsActive:!!me.lsActive, lsT:Math.max(0,me.lsT||0), mortar:!!me.mortar, mortarShots:me.mortarShots||0, eng:(me.cls==='Engineer'?(()=>{ const sl=this.engStoreLevel(me); return { storeLevel:sl, turrets:this.engTurrets(me.id), maxTurrets:this.engTurretCap(me), bots:this.engBots(me.id), maxBots:this.engBotCap(me), costs:ENG_COST, upCost:(ENG_STORE_UP[sl+1]||0) }; })():null), spd:Math.round(st.speed*(me.equip.gadget==='jetpack'?1:(SPEED_MULT[this.terrainCode(me.x,me.y)]||1))) }; }
     let stage=null; if(lobby){ stage=this.stageRect(); stage.zones=this.stageZones(stage); stage.record=this.waveRecord; }
     return { t:'state', you, fighters:out, radar, balls:this.balls.filter(b=>{ if(!me) return true; const R=(WEAPONS[me.equip.weapon]&&WEAPONS[me.equip.weapon].scope)?2800:1600; return ((b.x-me.x)*(b.x-me.x)+(b.y-me.y)*(b.y-me.y))<R*R; }).map(b=>({x:Math.round(b.x),y:Math.round(b.y),c:b.color})),
       turrets, mines, decoys, stores, space:'arena', stage, phase:this.phase, phaseTimer:Math.max(0,Math.round(this.phaseTimer)),
@@ -877,7 +885,7 @@ class Game {
       alive:{blue:this.aliveCount('blue'),red:this.aliveCount('red')}, pot:this.pot, buyIn:BUY_IN, anteState:(()=>{ const ps=[...this.players.values()]; const inP=ps.filter(p=>p.wantAnte); const amounts=[...new Set(inP.map(p=>p.anteAmt))].sort((a,b)=>a-b); return { total:ps.length, in:inP.length, amounts, ready:this.allAnted() }; })(),
       mode:this.mode, modeName:this.modeName(), tournament:this.tournament, caps:{...this.caps}, captureTarget:CAPTURE_TARGET, tourneyWins:TOURNEY_WINS, wave:this.invSession?this.invWave:0, superRound:this.superRound,
       flags:this.flags.map(fl=>({team:fl.team,x:Math.round(fl.x),y:Math.round(fl.y),home:fl.atHome,carried:!!fl.carrier})), anteOptions:ANTE_OPTIONS, modes:this.modeVoteState(),
-      events:(events||[]).filter(e=>!e.teamOnly||(me&&e.team===me.team)) };
+      events:(events||[]).filter(e=>(!e.teamOnly||(me&&e.team===me.team)) && (!e.to||(me&&e.to===me.id))) };
   }
 }
 
