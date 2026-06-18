@@ -51,7 +51,7 @@ const HEAVY_CLASSES=['VetTrooper','HeavyWeapons','Officer'];
 function weightCapacity(level){ return 10 + Math.floor(level/3)*2; }   // higher cap so two guns are viable; rewards leveling
 function modW(list){ let w=0; for(const m of (list||[])){ const d=WEAPON_MODS[m]; if(d) w+=d.wt||0; } return w; }
 const LEVELUP_BONUS=20;                 // coins per level gained
-const BUILD='hvpb-2026.06.14.54';        // bump on each change; shown in-game to verify deploys
+const BUILD='hvpb-2026.06.14.55';        // bump on each change; shown in-game to verify deploys
 
 // progression
 const CLASS_UNLOCK_LEVEL=10, LVL_BASE=2, LVL_STEP=1;
@@ -523,6 +523,7 @@ class Game {
     if(p.cls!=='Engineer') return {ok:false,msg:'Engineers only'};
     if(this.phase!=='active'||!p.alive) return {ok:false,money:this.getMoney(p),msg:'Only in-round, while alive'};
     if(item!=='bot') return {ok:false,money:this.getMoney(p),msg:'Build turrets with G; upgrade in the loadout'};
+    if(Math.abs(p.input.mx)>0.05||Math.abs(p.input.my)>0.05) return {ok:false,money:this.getMoney(p),msg:'Stand still to call in reinforcements'};
     if((p.botCD||0)>0) return {ok:false,money:this.getMoney(p),msg:`Reinforcements cooling down (${Math.ceil(p.botCD)}s)`};
     const cap=this.engBotCap(p); if(this.engBots(p.id)>=cap) return {ok:false,money:this.getMoney(p),msg:`Bot cap ${cap} — raise Store Level in your loadout`};
     const cost=ENG_COST.bot; if(this.getMoney(p)<cost) return {ok:false,money:this.getMoney(p),msg:'Not enough Paint Coins'};

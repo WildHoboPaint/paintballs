@@ -265,7 +265,7 @@ if(IS_TOUCH) document.addEventListener('DOMContentLoaded',()=>document.body.clas
 let shopOpenedBy=null, activeTab='class', myLoadout=null, loadCfg=null, classUnlock=null, modSlot=0, lbData=null, lbClass='overall';
 let lastBuy=null, pendingClass=null;
 let lobby=null, lobbyCanvas=null, freeCam={x:0,y:0}, storeCats=null;
-let actx=null, muted=false, prevAmmo=null, prevClip=null, prevDowned=false, bannerT=null; let peek=false; let myPos=null, srvPos=null; let chat=[]; let shake=0, hitMarkerT=0, myAim=0; const muzzles=[]; const CLIENT_BUILD='hvpb-2026.06.14.54';
+let engMoving=false; let actx=null, muted=false, prevAmmo=null, prevClip=null, prevDowned=false, bannerT=null; let peek=false; let myPos=null, srvPos=null; let chat=[]; let shake=0, hitMarkerT=0, myAim=0; const muzzles=[]; const CLIENT_BUILD='hvpb-2026.06.14.55';
 function aud(){ if(!actx){ try{ actx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } return actx; }
 function blip(type,freq,dur,vol,ramp){ if(muted) return; const a=aud(); if(!a) return; try{ const o=a.createOscillator(),g=a.createGain(); o.type=type; o.frequency.value=freq; if(ramp) o.frequency.exponentialRampToValueAtTime(Math.max(30,freq+ramp),a.currentTime+dur); g.gain.value=vol; g.gain.exponentialRampToValueAtTime(0.0001,a.currentTime+dur); o.connect(g); g.connect(a.destination); o.start(); o.stop(a.currentTime+dur); }catch(e){} }
 const sfx={
@@ -474,6 +474,7 @@ setInterval(()=>{
   let aimO=(IS_TOUCH?myAim:aim), aimDistO=aimDist, fireO=mouse.down;
   if(tAim.id!==null){ const dx=tAim.x-tAim.ox, dy=tAim.y-tAim.oy, d=Math.hypot(dx,dy); aimDistO=9999; if(d>16){ aimO=Math.atan2(dy,dx); myAim=aimO; fireO=true; } else { aimO=myAim; fireO=false; } }
   if(snap.phase==='active' && snap.you.downed){ mx=0; my=0; }
+  engMoving=(Math.abs(mx)>0.05||Math.abs(my)>0.05);
   send({t:'input',mx,my,aim:aimO,aimDist:aimDistO,fire:fireO&&canFight,reload:reloadFlag,deploy:deployFlag&&canFight,armGolden:goldenFlag,ult:ultFlag&&canFight,swap:swapFlag&&canFight}); reloadFlag=false; deployFlag=false; goldenFlag=false; ultFlag=false; swapFlag=false;
 },33);
 setInterval(()=>{ if(connected && ws && ws.readyState===1) send({t:'ping',ts:performance.now()}); }, 2000);
@@ -732,7 +733,7 @@ function updateFieldStore(y){ const el=$('fieldstore'); if(!el) return; const e=
   $('fsHead').textContent=`Field Store · 💰 ${y.money}`; const c=e.costs||{};
   const tcost={base:c.pellet_turret,grenade:c.grenade_turret,rocket:c.rocket_turret}, tname={base:'• Pellet',grenade:'◎ Grenade',rocket:'▲ Rocket'};
   ['base','grenade','rocket'].forEach(k=>{ const b=el.querySelector('[data-tt="'+k+'"]'); if(!b) return; const sel=(e.turretType||'base')===k; b.style.outline=sel?'2px solid #9be36a':''; b.style.opacity=sel?'1':'.7'; b.innerHTML=`${tname[k]}<br>💰${tcost[k]||0}`; });
-  const bb=el.querySelector('[data-it="bot"]'); if(bb){ const cd=e.botCD||0, capHit=(e.bots>=e.maxBots); bb.disabled=cd>0||capHit||y.money<(c.bot||0); bb.innerHTML = cd>0?`🤖 Bot<br>${cd}s` : (`🤖 Bot ${e.bots}/${e.maxBots}<br>💰${c.bot||0}`+(capHit?' max':'')); } }
+  const bb=el.querySelector('[data-it="bot"]'); if(bb){ const cd=e.botCD||0, capHit=(e.bots>=e.maxBots); bb.disabled=cd>0||capHit||engMoving||y.money<(c.bot||0); bb.innerHTML = engMoving?'🤖 Bot<br>stand still' : (cd>0?`🤖 Bot<br>${cd}s` : (`🤖 Bot ${e.bots}/${e.maxBots}<br>💰${c.bot||0}`+(capHit?' max':''))); } }
 function lbShort(c){ return ({VetTrooper:'Vet',HeavyWeapons:'Heavy'})[c]||c; }
 function renderLeaderboard(d){ lbData=d; lbClass='overall'; renderLbTabs(); renderLbCols(); }
 function renderLbTabs(){ const tb=$('lbtabs'); if(!tb||!lbData) return; const keys=['overall'].concat(lbData.byClass?Object.keys(lbData.byClass):[]); tb.innerHTML='';
