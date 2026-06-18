@@ -265,7 +265,7 @@ if(IS_TOUCH) document.addEventListener('DOMContentLoaded',()=>document.body.clas
 let shopOpenedBy=null, activeTab='class', myLoadout=null, loadCfg=null, classUnlock=null, modSlot=0, lbData=null, lbClass='overall';
 let lastBuy=null, pendingClass=null;
 let lobby=null, lobbyCanvas=null, freeCam={x:0,y:0}, storeCats=null;
-let actx=null, muted=false, prevAmmo=null, prevClip=null, prevDowned=false, bannerT=null; let peek=false; let myPos=null, srvPos=null; let chat=[]; let shake=0, hitMarkerT=0, myAim=0; const muzzles=[]; const CLIENT_BUILD='hvpb-2026.06.14.53';
+let actx=null, muted=false, prevAmmo=null, prevClip=null, prevDowned=false, bannerT=null; let peek=false; let myPos=null, srvPos=null; let chat=[]; let shake=0, hitMarkerT=0, myAim=0; const muzzles=[]; const CLIENT_BUILD='hvpb-2026.06.14.54';
 function aud(){ if(!actx){ try{ actx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } return actx; }
 function blip(type,freq,dur,vol,ramp){ if(muted) return; const a=aud(); if(!a) return; try{ const o=a.createOscillator(),g=a.createGain(); o.type=type; o.frequency.value=freq; if(ramp) o.frequency.exponentialRampToValueAtTime(Math.max(30,freq+ramp),a.currentTime+dur); g.gain.value=vol; g.gain.exponentialRampToValueAtTime(0.0001,a.currentTime+dur); o.connect(g); g.connect(a.destination); o.start(); o.stop(a.currentTime+dur); }catch(e){} }
 const sfx={
@@ -526,9 +526,9 @@ function draw(){
   if(snap.turrets) for(const t of snap.turrets){ const team=t.tm==='blue'?'#3da9fc':'#ff5470'; const TS=46;
     const kc=t.k==='rocket'?'#ff7b00':(t.k==='grenade'?'#caa44a':team);   // overlay colour = the ammo it fires
     ctx.fillStyle='rgba(0,0,0,.30)'; ctx.beginPath(); ctx.ellipse(t.x,t.y+TS*0.40,TS*0.42,TS*0.20,0,0,7); ctx.fill();
-    if(turretImg){ ctx.save(); ctx.translate(t.x,t.y); if(t.tm==='red') ctx.scale(-1,1); ctx.drawImage(turretImg,-TS/2,-TS/2,TS,TS); const tw=tintedSprite(turretImg,kc); if(tw){ ctx.globalAlpha=0.6; ctx.drawImage(tw,-TS/2,-TS/2,TS,TS); ctx.globalAlpha=1; } ctx.restore(); }
+    if(turretImg){ ctx.save(); ctx.translate(t.x,t.y); if(t.tm==='red') ctx.scale(-1,1); ctx.shadowColor=kc; ctx.shadowBlur=7; ctx.drawImage(turretImg,-TS/2,-TS/2,TS,TS); ctx.shadowBlur=0; ctx.drawImage(turretImg,-TS/2,-TS/2,TS,TS); const tw=tintedSprite(turretImg,kc); if(tw){ ctx.globalAlpha=0.18; ctx.drawImage(tw,-TS/2,-TS/2,TS,TS); ctx.globalAlpha=1; } ctx.restore(); }   // faint ammo-colour glow + mild tint
     else { ctx.fillStyle='#1a232e'; ctx.fillRect(t.x-11,t.y-11,22,22); ctx.fillStyle=kc; ctx.fillRect(t.x-8,t.y-8,16,16); }
-    const w=28,hw=clamp(t.hp/t.mh,0,1)*w; ctx.fillStyle='rgba(0,0,0,.5)'; ctx.fillRect(t.x-w/2,t.y-TS*0.62,w,3); ctx.fillStyle=kc; ctx.fillRect(t.x-w/2,t.y-TS*0.62,hw,3); }
+    const w=28,hw=clamp(t.hp/t.mh,0,1)*w; ctx.fillStyle='rgba(0,0,0,.5)'; ctx.fillRect(t.x-w/2,t.y-TS*0.62,w,3); ctx.fillStyle=team; ctx.fillRect(t.x-w/2,t.y-TS*0.62,hw,3); }
   // decoys (faded)
   if(snap.decoys) for(const d of snap.decoys){ ctx.globalAlpha=0.55; const dspr=sprites[d.cls]; if(dspr){ ctx.drawImage(dspr,d.x-16,d.y-16,32,32); } else { drawBody({x:d.x,y:d.y,a:0,ref:{tm:d.tm,cls:d.cls,hp:1,mh:1,id:-1,n:'?'}}); } ctx.globalAlpha=1; }
   if(snap.stores) for(const s of snap.stores){ const col=s.tm==='blue'?'#3da9fc':'#ff5470';
