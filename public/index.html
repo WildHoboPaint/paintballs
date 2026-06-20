@@ -274,7 +274,7 @@ if(IS_TOUCH) document.addEventListener('DOMContentLoaded',()=>document.body.clas
 let shopOpenedBy=null, activeTab='class', myLoadout=null, loadCfg=null, classUnlock=null, modSlot=0, lbData=null, lbClass='overall';
 let lastBuy=null, pendingClass=null;
 let lobby=null, lobbyCanvas=null, freeCam={x:0,y:0}, storeCats=null;
-let engMoving=false; let actx=null, muted=false, prevAmmo=null, prevClip=null, prevDowned=false, bannerT=null; let peek=false; let myPos=null, srvPos=null; let chat=[]; let shake=0, hitMarkerT=0, myAim=0; const muzzles=[]; const parts=[]; const amb=[]; let camKick={x:0,y:0}, dmgFlash=0, stepT=0; const CLIENT_BUILD='hvpb-2026.06.14.62';
+let engMoving=false; let actx=null, muted=false, prevAmmo=null, prevClip=null, prevDowned=false, bannerT=null; let peek=false; let myPos=null, srvPos=null; let chat=[]; let shake=0, hitMarkerT=0, myAim=0; const muzzles=[]; const parts=[]; const amb=[]; let camKick={x:0,y:0}, dmgFlash=0, stepT=0; const CLIENT_BUILD='hvpb-2026.06.14.64';
 function aud(){ if(!actx){ try{ actx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } return actx; }
 function blip(type,freq,dur,vol,ramp){ if(muted) return; const a=aud(); if(!a) return; try{ const o=a.createOscillator(),g=a.createGain(); o.type=type; o.frequency.value=freq; if(ramp) o.frequency.exponentialRampToValueAtTime(Math.max(30,freq+ramp),a.currentTime+dur); g.gain.value=vol; g.gain.exponentialRampToValueAtTime(0.0001,a.currentTime+dur); o.connect(g); g.connect(a.destination); o.start(); o.stop(a.currentTime+dur); }catch(e){} }
 const sfx={
@@ -290,7 +290,7 @@ const sfx={
 function addShake(a){ shake=Math.min(24, shake+a); }
 function showBanner(text,color){ const b=$('rbanner'); b.textContent=text; b.style.color=color; b.classList.remove('hidden'); clearTimeout(bannerT); bannerT=setTimeout(()=>b.classList.add('hidden'),3000); }
 function addSplashBlob(x,y,r,c){ for(let i=0;i<10;i++){ const a=Math.random()*6.28,d=Math.random()*r*0.8; splats.push({x:x+Math.cos(a)*d,y:y+Math.sin(a)*d,r:r*(0.25+Math.random()*0.25),c,al:.4+Math.random()*0.25}); } if(splats.length>600) splats.splice(0,splats.length-600); }
-const TC=['#2f6b32','#1d4a22','#245f7e','#6f6657'];
+const TC=['#46692c','#274a1c','#356a9c','#8a7c5a','#5a4528','#6b5a30'];   // minimap: lawn,hedge,pond,rock,soil,raised
 const TAB_LABELS={class:'Class',weapon:'Weapon',mods:'Weapon Mods',armor:'Armor Chips',gadget:'Gadget',ammo:'Ammo',modes:'Modes'};
 const MODE_NAMES={tdm:'Team Deathmatch',ctf:'Capture the Flag',invaders:'Bot Invaders'};
 const CLS_COLORS={Trooper:'#cbd5e1',VetTrooper:'#7dd3fc',HeavyWeapons:'#ff8c42',Scout:'#9b5de5',Infiltrator:'#06d6a0',Sniper:'#ef476f',Engineer:'#ffd166',Officer:'#3da9fc'};
@@ -430,22 +430,28 @@ function blendTerrain(c, grid, rows, cols, tile){
 }
 function prerenderTerrain(){
   const T=terrain, tile=T.tile; ter=document.createElement('canvas'); ter.width=arena.w; ter.height=arena.h; const c=ter.getContext('2d');
-  for(let ty=0;ty<T.rows;ty++) for(let tx=0;tx<T.cols;tx++) drawTile(c, T.grid[ty][tx], tx*tile, ty*tile, tile);
-  c.strokeStyle='rgba(228,238,252,.5)'; c.lineWidth=2;
-  for(let ty=0;ty<T.rows;ty++) for(let tx=0;tx<T.cols;tx++){ if(T.grid[ty][tx]!==2) continue; const X=tx*tile,Y=ty*tile;
-    if(ty>0&&T.grid[ty-1][tx]!==2){ c.beginPath(); c.moveTo(X,Y+1); c.lineTo(X+tile,Y+1); c.stroke(); }
-    if(ty<T.rows-1&&T.grid[ty+1][tx]!==2){ c.beginPath(); c.moveTo(X,Y+tile-1); c.lineTo(X+tile,Y+tile-1); c.stroke(); }
-    if(tx>0&&T.grid[ty][tx-1]!==2){ c.beginPath(); c.moveTo(X+1,Y); c.lineTo(X+1,Y+tile); c.stroke(); }
-    if(tx<T.cols-1&&T.grid[ty][tx+1]!==2){ c.beginPath(); c.moveTo(X+tile-1,Y); c.lineTo(X+tile-1,Y+tile); c.stroke(); }
-  }
-  const rnd=(s)=>{ s=Math.sin(s)*43758.5453; return s-Math.floor(s); };   // garden decals: flowers on lawn, lily pads on pond
-  for(let ty=0;ty<T.rows;ty++) for(let tx=0;tx<T.cols;tx++){ const code=T.grid[ty][tx], X=tx*tile, Y=ty*tile, h=rnd(tx*12.9898+ty*78.233);
-    if(code===0 && h>0.82){ const fx=X+tile*(0.2+0.6*rnd(tx+ty*7)), fy=Y+tile*(0.2+0.6*rnd(tx*3+ty)); const pc=['#ff6b9d','#ffd166','#ffffff','#b59bff','#ff8c42'][Math.floor(rnd(tx*5+ty*9)*5)];
-      c.fillStyle=pc; for(let k=0;k<5;k++){ const a=k/5*6.283; c.beginPath(); c.arc(fx+Math.cos(a)*2.3,fy+Math.sin(a)*2.3,1.6,0,7); c.fill(); } c.fillStyle='#e8b100'; c.beginPath(); c.arc(fx,fy,1.3,0,7); c.fill(); }
-    else if(code===2 && h>0.85){ c.fillStyle='rgba(56,138,70,.75)'; c.beginPath(); c.ellipse(X+tile*0.5,Y+tile*0.5,5.5,4.2,rnd(tx+ty),0,7); c.fill(); } }
-  amb.length=0; for(let i=0;i<26;i++) amb.push({x:Math.random()*arena.w,y:Math.random()*arena.h,vx:6+Math.random()*13,vy:5+Math.random()*9,ph:Math.random()*6.28,r:2+Math.random()*2.4,c:['rgba(255,107,157,.5)','rgba(255,255,255,.45)','rgba(255,209,102,.45)','rgba(150,200,90,.4)'][i%4]});
+  const lawn=tiles['grass']&&tiles['grass'][0];
+  if(lawn){ for(let Y=0;Y<arena.h;Y+=tile) for(let X=0;X<arena.w;X+=tile) c.drawImage(lawn,X,Y,tile,tile); } else { c.fillStyle='#39562a'; c.fillRect(0,0,arena.w,arena.h); }
+  const grow=tile*0.86, hasF=('filter' in c);
+  const cellsOf=(code)=>{ const out=[]; let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9; for(let ty=0;ty<T.rows;ty++) for(let tx=0;tx<T.cols;tx++){ if(T.grid[ty][tx]!==code) continue; out.push([tx,ty]); if(tx<x0)x0=tx; if(tx>x1)x1=tx; if(ty<y0)y0=ty; if(ty>y1)y1=ty; } return out.length?{cells:out,bb:[x0*tile-tile,y0*tile-tile,(x1+1)*tile+tile,(y1+1)*tile+tile]}:null; };
+  const pathOf=(cells)=>{ c.beginPath(); for(const cc of cells){ const cx=cc[0]*tile+tile/2, cy=cc[1]*tile+tile/2; c.moveTo(cx+grow,cy); c.arc(cx,cy,grow,0,7); } };
+  const tiledBB=(name,fb,bb)=>{ const arr=tiles[name], x0=Math.max(0,bb[0]),y0=Math.max(0,bb[1]),x1=Math.min(arena.w,bb[2]),y1=Math.min(arena.h,bb[3]); for(let Y=Math.floor(y0/tile)*tile;Y<y1;Y+=tile) for(let X=Math.floor(x0/tile)*tile;X<x1;X+=tile){ if(arr&&arr.length) c.drawImage(arr[Math.abs((X*73+Y*131))%arr.length],X,Y,tile,tile); else { c.fillStyle=fb; c.fillRect(X,Y,tile,tile); } } };
+  const region=(code,fillFn,rim,rimW)=>{ const r=cellsOf(code); if(!r) return;
+    c.save(); c.translate(1.5,4); if(hasF) c.filter='blur(4px)'; c.fillStyle='rgba(0,0,0,.30)'; pathOf(r.cells); c.fill(); if(hasF) c.filter='none'; c.restore();   // soft drop shadow
+    c.save(); pathOf(r.cells); c.clip(); fillFn(r.bb,r.cells); c.restore();                                                                                       // smooth merged textured region
+    if(rim){ c.save(); pathOf(r.cells); c.lineWidth=rimW||2; c.strokeStyle=rim; c.stroke(); c.restore(); }
+  };
+  region(4, bb=>tiledBB('wasteland','#4a3a22',bb));                                            // soil beds
+  region(5, bb=>tiledBB('hill','#6b5a30',bb), 'rgba(50,35,18,.4)', 2);                          // raised beds
+  region(2, bb=>tiledBB('water','#2f5fa0',bb), 'rgba(190,225,255,.55)', 3);                     // pond + bright shoreline
+  region(3, bb=>tiledBB('mountain','#8a7c5a',bb), 'rgba(0,0,0,.22)', 1.5);                       // rockery
+  region(1, (bb,cells)=>{ const x0=Math.max(0,bb[0]),y0=Math.max(0,bb[1]); c.fillStyle='#2f4d22'; c.fillRect(x0,y0,Math.min(arena.w,bb[2])-x0,Math.min(arena.h,bb[3])-y0);   // hedge = one green mass + leafy stamps
+      if(treeImg) for(const cc of cells){ const s=tile*1.2; c.drawImage(treeImg, cc[0]*tile+tile/2-s/2, cc[1]*tile+tile/2-s/2, s, s); } }, 'rgba(18,36,14,.5)', 2.5);
+  const rnd=(s)=>{ s=Math.sin(s)*43758.5453; return s-Math.floor(s); };
+  for(let ty=0;ty<T.rows;ty++) for(let tx=0;tx<T.cols;tx++){ if(T.grid[ty][tx]!==2) continue; const X=tx*tile,Y=ty*tile; if(rnd(tx*12.9+ty*78.2)>0.9){ c.fillStyle='rgba(56,138,70,.7)'; c.beginPath(); c.ellipse(X+tile/2,Y+tile/2,6,4.5,rnd(tx+ty),0,7); c.fill(); } }   // lily pads
+  amb.length=0; for(let i=0;i<8;i++) amb.push({x:Math.random()*arena.w,y:Math.random()*arena.h,vx:6+Math.random()*12,vy:5+Math.random()*8,ph:Math.random()*6.28,r:2+Math.random()*2,c:['rgba(255,255,255,.26)','rgba(225,235,215,.22)'][i%2]});
   terMini=document.createElement('canvas'); terMini.width=mm.width; terMini.height=mm.height; const mc=terMini.getContext('2d'); const sx=mm.width/arena.w, sy=mm.height/arena.h;
-  for(let ty=0;ty<T.rows;ty++) for(let tx=0;tx<T.cols;tx++){ mc.fillStyle=TC[T.grid[ty][tx]]; mc.fillRect(tx*tile*sx,ty*tile*sy,Math.ceil(tile*sx),Math.ceil(tile*sy)); }
+  for(let ty=0;ty<T.rows;ty++) for(let tx=0;tx<T.cols;tx++){ mc.fillStyle=TC[T.grid[ty][tx]]||'#46692c'; mc.fillRect(tx*tile*sx,ty*tile*sy,Math.ceil(tile*sx),Math.ceil(tile*sy)); }
 }
 function drawTile(c,code,x,y,t){
   if(code===1 && treeImg && tiles['grass'] && tiles['grass'].length){    // forest = grass + scattered tree overlay
@@ -642,7 +648,7 @@ function drawFighter(v){
   if(f.cls==='Scout')r=11; else if(f.cls==='HeavyWeapons')r=18; else if(f.cls==='Sniper'){r=12;barrel=34;} else if(f.cls==='Infiltrator')r=12; else if(f.cls==='Officer')r=15;
   const spr = f.bot ? ((snap.mode==='invaders'&&pestSprites.length)?pestSprites[f.id%pestSprites.length]:(botSprites.length?botSprites[f.id%botSprites.length]:null)) : sprites[f.cls];
   if(spr){
-    const S=32, hh=S/2; const puls=(spd)=>0.5+0.5*Math.abs(Math.sin(performance.now()/spd));
+    let S=46; if(f.bot){ S=(snap.mode==='invaders')?50:46; } else if(f.cls==='HeavyWeapons')S=58; else if(f.cls==='Officer'||f.cls==='VetTrooper')S=50; else if(f.cls==='Scout')S=40; else if(f.cls==='Infiltrator')S=42; const hh=S/2; const puls=(spd)=>0.5+0.5*Math.abs(Math.sin(performance.now()/spd));
     let glow=null, gblur=0, tint=null, tintA=0, alpha=1;
     if(f.gold){ glow='#ffd700'; gblur=13; }
     else if(f.sh){ glow='#8fefff'; gblur=12; }

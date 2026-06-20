@@ -51,7 +51,7 @@ const HEAVY_CLASSES=['VetTrooper','HeavyWeapons','Officer'];
 function weightCapacity(level){ return 10 + Math.floor(level/3)*2; }   // higher cap so two guns are viable; rewards leveling
 function modW(list){ let w=0; for(const m of (list||[])){ const d=WEAPON_MODS[m]; if(d) w+=d.wt||0; } return w; }
 const LEVELUP_BONUS=20;                 // coins per level gained
-const BUILD='hvpb-2026.06.14.62';        // bump on each change; shown in-game to verify deploys
+const BUILD='hvpb-2026.06.14.64';        // bump on each change; shown in-game to verify deploys
 
 // progression
 const CLASS_UNLOCK_LEVEL=10, LVL_BASE=2, LVL_STEP=1;
@@ -155,11 +155,12 @@ function generateTerrain(){   // a garden: lawns, hedge beds, a central pond, ro
   const rect=(x0,y0,w,h,t)=>{ for(let y=y0;y<y0+h;y++) for(let x=x0;x<x0+w;x++) if(inb(x,y)) g[y][x]=t; };
   const ell=(cx,cy,rx,ry,t)=>{ for(let y=0;y<rows;y++) for(let x=0;x<half;x++){ const dx=(x-cx)/rx,dy=(y-cy)/ry; if(dx*dx+dy*dy<=1+(Math.random()*0.22-0.09)) g[y][x]=t; } };
   const dens=Math.max(1,(cols*rows)/(50*38));
-  ell(half-1, Math.floor(rows/2), Math.max(3,Math.round(4*Math.sqrt(dens))), Math.max(2,Math.round(3*Math.sqrt(dens))), WATER);   // central pond (mirrors into one oval)
-  for(let i=0;i<Math.max(2,Math.round(3*dens));i++){ const bw=2+Math.floor(rand(0,3)), bh=2+Math.floor(rand(0,4)), bx=Math.floor(rand(6,Math.max(7,half-bw-1))), by=Math.floor(rand(2,Math.max(3,rows-bh-2))); rect(bx,by,bw,bh,FOREST); }   // tidy hedge beds
-  for(let i=0;i<Math.max(2,Math.round(2*dens));i++) ell(Math.floor(rand(6,half-2)),Math.floor(rand(2,rows-2)),rand(1.4,2.4),rand(1.2,2.0),MOUNT);   // rockery clusters
-  for(let i=0;i<Math.max(1,Math.round(1.5*dens));i++){ const bw=2+Math.floor(rand(0,2)),bh=2+Math.floor(rand(0,2)); rect(Math.floor(rand(6,Math.max(7,half-bw-1))),Math.floor(rand(2,Math.max(3,rows-bh-2))),bw,bh,HILL); }   // raised beds
-  for(let i=0;i<Math.round(7*dens);i++){ const x=Math.floor(rand(6,half-1)),y=Math.floor(rand(2,rows-2)); if(g[y][x]===PLAIN) g[y][x]=FOREST; }   // scattered bushes for cover
+  ell(half-1, Math.floor(rows/2), Math.max(4,Math.round(5*Math.sqrt(dens))), Math.max(3,Math.round(4*Math.sqrt(dens))), WATER);   // one big central pond
+  for(let i=0;i<Math.max(2,Math.round(2.6*dens));i++){ const bw=3+Math.floor(rand(0,4)), bh=3+Math.floor(rand(0,4)), bx=Math.floor(rand(6,Math.max(7,half-bw-1))), by=Math.floor(rand(2,Math.max(3,rows-bh-2))); rect(bx,by,bw,bh,FOREST); }   // big hedge beds
+  for(let i=0;i<Math.max(2,Math.round(2*dens));i++) ell(Math.floor(rand(6,half-2)),Math.floor(rand(2,rows-2)),rand(2.0,3.4),rand(1.6,2.8),MOUNT);   // big rockery clusters
+  for(let i=0;i<Math.max(1,Math.round(1.2*dens));i++){ const bw=3+Math.floor(rand(0,3)),bh=2+Math.floor(rand(0,3)); rect(Math.floor(rand(6,Math.max(7,half-bw-1))),Math.floor(rand(2,Math.max(3,rows-bh-2))),bw,bh,HILL); }   // raised beds
+  for(let i=0;i<Math.max(1,Math.round(1.4*dens));i++){ const bw=3+Math.floor(rand(0,3)),bh=2+Math.floor(rand(0,3)); rect(Math.floor(rand(6,Math.max(7,half-bw-1))),Math.floor(rand(2,Math.max(3,rows-bh-2))),bw,bh,WASTE); }   // soil beds
+  for(let i=0;i<Math.round(2*dens);i++){ const x=Math.floor(rand(6,half-1)),y=Math.floor(rand(2,rows-2)); if(g[y][x]===PLAIN) g[y][x]=FOREST; }   // a few lone shrubs
   for(let y=0;y<rows;y++) for(let x=0;x<5;x++) g[y][x]=PLAIN;          // clear spawn lanes
   for(let y=0;y<rows;y++) for(let x=0;x<half;x++) g[y][cols-1-x]=g[y][x]; // mirror for fairness
   return { grid:g, cols, rows, tile:TILE };
