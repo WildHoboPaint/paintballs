@@ -51,7 +51,7 @@ const HEAVY_CLASSES=['VetTrooper','HeavyWeapons','Officer'];
 function weightCapacity(level){ return 10 + Math.floor(level/3)*2; }   // higher cap so two guns are viable; rewards leveling
 function modW(list){ let w=0; for(const m of (list||[])){ const d=WEAPON_MODS[m]; if(d) w+=d.wt||0; } return w; }
 const LEVELUP_BONUS=20;                 // coins per level gained
-const BUILD='hvpb-2026.06.14.57';        // bump on each change; shown in-game to verify deploys
+const BUILD='hvpb-2026.06.14.62';        // bump on each change; shown in-game to verify deploys
 
 // progression
 const CLASS_UNLOCK_LEVEL=10, LVL_BASE=2, LVL_STEP=1;
@@ -147,19 +147,20 @@ function buildObstacles(){ const t=40; return [
   {x:0,y:0,w:ARENA.w,h:t,wall:true},{x:0,y:ARENA.h-t,w:ARENA.w,h:t,wall:true},
   {x:0,y:0,w:t,h:ARENA.h,wall:true},{x:ARENA.w-t,y:0,w:t,h:ARENA.h,wall:true} ]; }
 
-function generateTerrain(){
+function generateTerrain(){   // a garden: lawns, hedge beds, a central pond, rockeries, raised beds (mirrored, spawns clear)
   const cols=Math.floor(ARENA.w/TILE), rows=Math.floor(ARENA.h/TILE);
   const g=Array.from({length:rows},()=>new Array(cols).fill(PLAIN));
   const half=Math.floor(cols/2);
-  const blob=(cx,cy,r,type)=>{ for(let y=0;y<rows;y++) for(let x=0;x<half;x++){
-    if(Math.hypot(x-cx,y-cy)<=r+(Math.random()*1.2-0.5)) g[y][x]=type; } };
-  const dens=(cols*rows)/(50*38);                 // scale terrain count with map size
-  const groups=[{n:Math.max(3,Math.round(6*dens)),r:[1.5,3],t:FOREST},{n:Math.max(2,Math.round(2.5*dens)),r:[1.6,2.8],t:MOUNT},{n:Math.max(3,Math.round(3*dens)),r:[1.6,2.8],t:WATER},{n:Math.max(3,Math.round(3*dens)),r:[1.6,2.8],t:HILL},{n:Math.max(3,Math.round(2.5*dens)),r:[2,3.4],t:WASTE}];
-  for(const b of groups) for(let i=0;i<b.n;i++) blob(rand(3,half-2),rand(2,rows-2),rand(b.r[0],b.r[1]),b.t);   // every terrain forms several distinct sections
-  for(let pass=0;pass<2;pass++) for(let y=0;y<rows;y++) for(let x=0;x<half;x++){ const t=g[y][x]; if(t===PLAIN||t===FOREST) continue;   // dissolve lone tiles into plains (areas only; forest stays scattered trees)
-    let same=0; if(y>0&&g[y-1][x]===t)same++; if(y<rows-1&&g[y+1][x]===t)same++; if(x>0&&g[y][x-1]===t)same++; if(x<half-1&&g[y][x+1]===t)same++;
-    if(same===0) g[y][x]=PLAIN; }
-  for(let y=0;y<rows;y++) for(let x=0;x<4;x++) g[y][x]=PLAIN;          // clear spawn columns
+  const inb=(x,y)=>x>=0&&x<half&&y>=0&&y<rows;
+  const rect=(x0,y0,w,h,t)=>{ for(let y=y0;y<y0+h;y++) for(let x=x0;x<x0+w;x++) if(inb(x,y)) g[y][x]=t; };
+  const ell=(cx,cy,rx,ry,t)=>{ for(let y=0;y<rows;y++) for(let x=0;x<half;x++){ const dx=(x-cx)/rx,dy=(y-cy)/ry; if(dx*dx+dy*dy<=1+(Math.random()*0.22-0.09)) g[y][x]=t; } };
+  const dens=Math.max(1,(cols*rows)/(50*38));
+  ell(half-1, Math.floor(rows/2), Math.max(3,Math.round(4*Math.sqrt(dens))), Math.max(2,Math.round(3*Math.sqrt(dens))), WATER);   // central pond (mirrors into one oval)
+  for(let i=0;i<Math.max(2,Math.round(3*dens));i++){ const bw=2+Math.floor(rand(0,3)), bh=2+Math.floor(rand(0,4)), bx=Math.floor(rand(6,Math.max(7,half-bw-1))), by=Math.floor(rand(2,Math.max(3,rows-bh-2))); rect(bx,by,bw,bh,FOREST); }   // tidy hedge beds
+  for(let i=0;i<Math.max(2,Math.round(2*dens));i++) ell(Math.floor(rand(6,half-2)),Math.floor(rand(2,rows-2)),rand(1.4,2.4),rand(1.2,2.0),MOUNT);   // rockery clusters
+  for(let i=0;i<Math.max(1,Math.round(1.5*dens));i++){ const bw=2+Math.floor(rand(0,2)),bh=2+Math.floor(rand(0,2)); rect(Math.floor(rand(6,Math.max(7,half-bw-1))),Math.floor(rand(2,Math.max(3,rows-bh-2))),bw,bh,HILL); }   // raised beds
+  for(let i=0;i<Math.round(7*dens);i++){ const x=Math.floor(rand(6,half-1)),y=Math.floor(rand(2,rows-2)); if(g[y][x]===PLAIN) g[y][x]=FOREST; }   // scattered bushes for cover
+  for(let y=0;y<rows;y++) for(let x=0;x<5;x++) g[y][x]=PLAIN;          // clear spawn lanes
   for(let y=0;y<rows;y++) for(let x=0;x<half;x++) g[y][cols-1-x]=g[y][x]; // mirror for fairness
   return { grid:g, cols, rows, tile:TILE };
 }
@@ -443,13 +444,18 @@ class Game {
   // ---- combat ----
   armGolden(f){ if(!f||!f.alive) return; const st=this.stats(f); if(st.golden && (f.goldenCD||0)<=0) f.goldenArmed=true; }
   useUlt(id){ const p=this.players.get(id); if(!p||p.bot||!p.alive||this.phase!=='active') return; const C=CLASSES[p.cls]; const ult=C&&C.ult; if(!ult) return;
+    if(ult==='mortar'){
+      if(p.mortar){ p.mortar=false; this.emit({type:'toast',to:p.id,text:`Mortar stowed — ${p.mortarShots} shot${p.mortarShots===1?'':'s'} left (Space to re-man)`}); return; }
+      if(p.mortarShots>0){ p.mortar=true; p.mortarT=14; p.cool=0; this.emit({type:'ult',k:'mortar',id:p.id}); return; }
+      if(!p.ultReady) return;
+      p.ultReady=false; p.mortarShots=MORTAR_SHOTS; p.mortar=true; p.mortarT=14; p.cool=0;
+      this.emit({type:'ult',k:'mortar',id:p.id}); this.emit({type:'msg',team:p.team,teamOnly:true,text:`${p.name} set up the Mortar.`}); return; }
     if(!p.ultReady) return;   // ability works with any weapon now (independent of loadout)
     p.ultReady=false;
     if(ult==='evac'){ p.evacT=3.0; this.emit({type:'ult',k:'evac',id:p.id,x:Math.round(p.x),y:Math.round(p.y)}); }
     else if(ult==='speed'){ p.ultActive='speed'; p.ultT=10.0; this.emit({type:'ult',k:'speed',id:p.id}); }
     else if(ult==='invis'){ p.ultActive='invis'; p.ultT=10.0; this.emit({type:'ult',k:'invis',id:p.id}); }
     else if(ult==='laststand'){ const ct=this.classTierOf(p); p.lsArmed=true; p.lsArmedT=5+ct; p.lsRevive=2.5+ct*0.5; this.emit({type:'ult',k:'laststand',id:p.id}); }
-    else if(ult==='mortar'){ p.mortar=true; p.mortarShots=MORTAR_SHOTS; p.mortarT=14; p.cool=0; this.emit({type:'ult',k:'mortar',id:p.id}); }
     this.emit({type:'msg',team:p.team,teamOnly:true,text:`${p.name} used ${ult==='evac'?'Emergency Evac':ult==='speed'?'Speed Boost':ult==='invis'?'Cloak':ult==='laststand'?'Last Stand':'the Mortar'}.`}); }
   evacTeleport(f){ const minD=10*TILE; let tx=f.x,ty=f.y,tries=0;
     do{ tx=rand(80,ARENA.w-80); ty=rand(80,ARENA.h-80); tries++; } while(Math.hypot(tx-f.x,ty-f.y)<minD && tries<50);
@@ -777,7 +783,7 @@ class Game {
       if(p.botBuilding){ if(Math.abs(p.input.mx)>0.05||Math.abs(p.input.my)>0.05){ p.botBuilding=false; p.botBuildT=0; this.addMoney(p,ENG_COST.bot); this.emit({type:'toast',to:p.id,text:'Bot build cancelled — you moved (refunded)'}); } else { p.botBuildT-=dt; if(p.botBuildT<=0){ p.botBuilding=false; this.spawnEngBot(p); this.emit({type:'toast',to:p.id,text:'Bot deployed'}); } } } }
     for(const b of this.bots){ if(b.alive) this.updateAI(b,dt); }
     const all=[...this.players.values(),...this.bots];
-    for(const f of all){ if(f.cool>0) f.cool-=dt; if(f.goldenCD>0) f.goldenCD-=dt; if(f.swapCD>0) f.swapCD-=dt; if(f.storeCD>0) f.storeCD-=dt; if(f.botCD>0) f.botCD-=dt; if(f.mortar){ f.mortarT-=dt; if(f.mortarT<=0){ f.mortar=false; f.mortarShots=0; } }
+    for(const f of all){ if(f.cool>0) f.cool-=dt; if(f.goldenCD>0) f.goldenCD-=dt; if(f.swapCD>0) f.swapCD-=dt; if(f.storeCD>0) f.storeCD-=dt; if(f.botCD>0) f.botCD-=dt; if(f.mortar){ f.mortarT-=dt; if(f.mortarT<=0){ f.mortar=false; } }
       if(f.reloading){ f.reloadT-=dt; if(f.reloadT<=0){ f.reloading=false; const rs=this.stats(f); const unl=(this.mode==='invaders')||f.bot; f.clip=unl?rs.mag:Math.min(rs.mag,Math.max(0,f.ammo)); } }
       if(f.evacT>0){ f.evacT-=dt; if(f.evacT<=0) this.evacTeleport(f); }
       if(f.ultActive){ f.ultT-=dt; if(f.ultT<=0) f.ultActive=null; }
